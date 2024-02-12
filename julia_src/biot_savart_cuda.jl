@@ -3,20 +3,117 @@ using StaticArrays
 using LinearAlgebra
 
 
-function slice3(arr, i)
-    return @inbounds SVector{3, Float32}(arr[1, i], arr[2, i], arr[3, i])
+
+################ Device Functions ################
+
+#=
+I don't think you can define nested functions with
+CUDA.jl, so, the functions used in the kernel are
+defined outside of it here.
+
+Note: The code doesn't have to be physically outside
+of the kernel, you just can't assume you have access
+to any variables other than what is passed to the
+function and those defined inside of it. 
+=#
+
+#==================================== 
+--------Vortex Path Model--------
+Input:
+    - vpps: vortex path points
+    - sidx: segment index
+    - ell \in [0, 1]: arc length
+Output:
+    - vortex path point at ell
+    - unit tangent vector at ell
+
+Note: we rescaled the arc length
+    variable so the domain of ell is
+    [0, 1] for all segments. This
+    way we don't need to know the
+    actual length of the vortex path
+    or each segment.
+====================================#
+# Vortex path model (For now) linear
+function vpathmodel(vorpps, segidx, ell)
+    @inbounds pnt1 = SVector{3, Float32}(
+        vorpps[1, segidx],
+        vorpps[2, segidx],
+        vorpps[3, segidx])
+
+    @inbounds pnt2 = SVector{3, Float32}(
+        vorpps[1, segidx+UInt32(1)],
+        vorpps[2, segidx+UInt32(1)],
+        vorpps[3, segidx+UInt32(1)])
+
+    seg = pnt2 .- pnt1
+    
+    return pnt1 .+ ell .* seg, seg ./ norm(seg)
 end
 
-function uniform_trapezoidal_rule(fn, a, b, numsteps=100)
-    du = (b - a) ./ numsteps
-    rtn_vel = @MVector zeros(3)
-    rtn_vel .+= 0.5 * (fn(a) + fn(b))
-    for i in 1:numsteps-1
-        rtn_vel .+= fn(a + i*du)
-    end
-    return rtn_vel .* du
+function xi(fp, vorpps, segidx, ell)
+    vppoint, vptan = vpathmodel(vorpps, segidx, ell)
+    return fp .- vppoint, vptan
 end
 
+function vcoremodel(corerads, segidx, ell)
+    @inbounds coreraddiff = corerads[segidx+UInt32(1)] - corerads[segidx]
+    @inbounds return corerads[segidx] + ell * coreraddiff
+end
+
+function vcircmodel(circs, segidx, ell)
+    @inbounds circdiff = circs[segidx+UInt32(1)] - circs[segidx]
+    @inbounds return circs[segidx] + ell * circdiff
+end
+
+# Define the weight function
+# x \in [0, 1]
+function bsweightmodel(x)
+    return Float32(1)
+end
+
+#====================================
+--------BS integrand function--------
+We will integrate the Biot-Savart
+law from 0 to some cutoff radius.
+After that, we will use the analytical
+solution for the velocity field of a
+infinitesimally thin vortex filament.
+- At what cutoff radius does the
+    solution of the BS law converge
+    to that of the infinitesimally
+    thin vortex filament?
+====================================#
+# Define the integrand function
+function bsintegrand(fp, vorpps, corerads, circs, segidx, ell)
+    # global i
+    xiell, vptanell = xi(fp, vorpps, segidx, ell)
+    xiellmag = norm(xiell)
+    corell = vcoremodel(corerads, segidx, ell)
+    circell = vcircmodel(circs, segidx, ell)
+    direll = cross(vptanell, xiell)
+    weightell = bsweightmodel(xiellmag / corell)
+    return (weightell * circell / xiellmag^3) .* direll
+end
+
+# Define BS solver
+function bs_uniform_trapezoidal_rule(numsteps, fp, vorpps, corerads, circs, segidx, ell)
+    stepsize = Float32(1) / numsteps
+    sol = MVector{3, Float32}(0, 0, 0)
+    sol += bsintegrand(fp, vorpps, corerads, circs, segidx, Float32(0))
+    sol += bsintegrand(fp, vorpps, corerads, circs, segidx, Float32(1))
+    sol .*= Float32(0.5)
+
+    # stepindex = UInt32(2)
+    # while stepindex < numsteps
+    #     sol .+= integrand(stepindex * stepsize, segindex)
+    #     stepindex += UInt32(1)
+    # end
+    return sol .* (stepsize / (4 * pi))
+end
+
+
+################ Biot-Savart kernel ################
 
 #=
 - [x] Pass all the arguments to the kernel and
@@ -26,23 +123,23 @@ end
     - [x] vortexpath
     - [x] vortexcore
     - [x] weightfn
-    - [!] integrator
-    - [-] circulation (*see log for note*)
+    - [!] integrator (*see log for note*)
+    - [x] circulation (*see log for note*)
 - [x] Use the global index to get the field point
     from the batch and store it in rtnvelocities
-- [ ] Check if functions from LinearAlgebra work
+- [x] Check if functions from LinearAlgebra work
     on the GPU
-    - [?] norm
-    - [?] cross
-- [ ] Loop through the vortex path points
-    - [ ] Get the segment vector
-    - [ ] Get the tangent vector
-    - [ ] Define the path function
-    - [ ] Define the xi function
-    - [ ] Define the core function
-    - [ ] Define the integrand function
-    - [ ] Integrate the integrand function
-    - [ ] Add the result to the return velocities
+    - [x] norm (probably? I assume they are running on the GPU)
+    - [x] cross
+- [x] Loop through the vortex path points
+    - [x] Get the segment vector
+    - [x] Get the tangent vector
+    - [x] Define the path function
+    - [x] Define the xi function
+    - [x] Define the core function
+    - [x] Define the integrand function
+    - [x] Integrate the integrand function
+    - [x] Add the result to the return velocities
 =#
 #=
 **Log**
@@ -68,44 +165,46 @@ LinearAlgebra functions on the GPU
 =#
 function weighted_biot_savart_kernel(
     returnvelocities,
-    fieldpointbatch,
-    vortexpath,
-    vortexcore,
-    weightfn,
-    circulation=1)
+    fieldpointsbatch,
+    vortexpathpoints,
+    vortexcoreradii,
+    vortexcirculations)
+
+    # Compute the number of vortex path segments
+    numvpsegs = Int32(size(vortexpathpoints, 2) - 1)
 
     # Compute the global index of the thread
     idx = (blockIdx().x - Int32(1)) * blockDim().x + threadIdx().x
 
-    # Get the field point from the batch
-    @inbounds fieldpoint = slice3(fieldpointbatch, idx)
-    
-                                     # DEBUG
-    # @inbounds returnvelocities[:, idx] .= norm(fieldpoint) .+ cross(fieldpoint, fieldpoint)
-    # CUDA.@cuprint(uniform_trapezoidal_rule())
+    # Get this thread's field point from the batch
+    @inbounds fieldpoint = SVector{3, Float32}(
+        fieldpointsbatch[1, idx],
+        fieldpointsbatch[2, idx],
+        fieldpointsbatch[3, idx])
 
-    # Step through each segment of the vortex path
-    rtn_vel = @MVector zeros(3)
-    for i in 1:(size(vortexpath, 2) -1)
-        vseg = slice3(vortexpath, i+1) .- slice3(vortexpath, i)
-        vsegmag = norm(vseg)
-        vsegtan = vseg ./ vsegmag
-        path(ell) = slice3(vortexpath, i) .+ ell .* vsegtan
-        xi(ell) = fieldpoint .- path(ell)
-        # core(ell) = vortexcore[i] .+ ell .* (vortexcore[i+1] .- vortexcore[i]) / vsegmag
-        function integrand(ell, params...)
-            xiell = xi(ell)
-            xiellmag = norm(xiell)
-            # c = core(ell)
-            dir = cross(vsegtan, xiell)
-            # w = weightfn(xiellmag / c)
-            return (1i32 / xiellmag^3) .* dir
-        end
-        rtn_vel .+= vsegtan .+ uniform_trapezoidal_rule(integrand, 0, vsegmag)  # DEBUG
-        # rtn_vel .+= circulation .* integrator(integrand, 0, vsegmag) ./ (4*pi)
+    # Initialize the velocity at the field point
+    vel = MVector{3, Float32}(0, 0, 0)
+
+    # Step through each vortex path segment.
+    # We are using a while loop because the CUDA.jl
+    # docs says this is more efficient than using a
+    # for loop with a step interval.
+    segindex = UInt32(1)
+    while segindex <= numvpsegs
+
+        vel .+= bs_uniform_trapezoidal_rule(
+            UInt32(1000),  # Number of integrations steps
+            fieldpoint,
+            vortexpathpoints,
+            vortexcoreradii,
+            vortexcirculations,
+            segindex,
+            Float32(0.5))
+
+        segindex += UInt32(1)  # Advance the loop counter
     end
 
-    returnvelocities[:, idx] .= rtn_vel
+    returnvelocities[:, idx] .= vel
     return nothing
 end
 
@@ -124,46 +223,90 @@ along the y-axis.
 using Plots
 
 # Define the vortex path and core
-vp = CuArray{Float32}([[-1000, 0, 0] [1000, 0, 0]])  # [0 1; 0 0; 0 0] same same
-vc = CuArray{Float32}([0.1, 0.1])
+numvpsegs = 2
+vp = zeros(Float32, 3, numvpsegs + 1)
+vp[1, :] .= range(-1000, stop=1000, length=numvpsegs + 1)
+vp = CuArray{Float32}(vp)
+vc = CUDA.ones(Float32, numvpsegs + 1)
+
+# Define the circulation at each path point
+cir = CUDA.ones(Float32, numvpsegs + 1)
 
 # Define the field points
-y = zeros(Float32, 10)
-y .= collect(0:2:18)  # end point is included in range
+numfp = 10_000
+y = zeros(Float32, numfp)
+y .= range(0, 20, length=numfp)  # end point is included in range
 y[1] = 1e-3  # avoid divide by zero
-fp = zeros(Float32, 3, 10)
+fp = zeros(Float32, 3, numfp)
 fp[2, :] = y
 fp = CuArray{Float32}(fp)
 
-# Create the return velocities array
-# CuArray is mutable!!!
-rtnvelocities = CuArray{Float32}(undef, 3, 10)
-print("rtnvelocities (before):")
-display(rtnvelocities)
+# Initialize velocity array
+vel_num = zeros(3, numfp)
+# println("size(vel_num) = ", size(vel_num))  # DEBUG
 
-# Call the kernel
-@cuda blocks=2 threads=3 weighted_biot_savart_kernel(
-    rtnvelocities,
-    fp,
+numblocks = 4
+numthreads = 1024
+fpbatchsize = numblocks * numthreads
+numbatches = ceil(Int, size(fp, 2) / fpbatchsize)
+fpbatchindex = 1
+for fpbatchindex in 1:(numbatches-1)
+    println("On batch ", fpbatchindex, " of ", numbatches, ".")
+
+    # Create the return velocities array
+    # CuArray is mutable!!!
+    rtnv = CuArray{Float32}(undef, 3, fpbatchsize)
+    # println("size(rtnv) = ", size(rtnv))  # DEBUG
+    # display(rtnv)
+
+    # Get a batch of: field points
+    spanstart = 1 + ((fpbatchindex - 1) * fpbatchsize)
+    # @show spanstart  # DEBUG
+    spanend = fpbatchindex * fpbatchsize
+    # @show spanend  # DEBUG
+    fpbatch = fp[:, spanstart:spanend]
+
+    println("\tSending to CUDA kernel...")
+    # Call the kernel
+    # @device_code_warntype 
+    # @device_code_llvm
+    # @device_code_lowered
+    @cuda blocks=numblocks threads=numthreads weighted_biot_savart_kernel(
+        rtnv,
+        fpbatch,
+        vp,
+        vc,
+        cir)
+
+    # print("rtnv (after):")
+    # display(rtnv)
+
+    println("\tCopying to host...")
+    vel_num[:, spanstart:spanend] .= Array(rtnv)
+end
+
+# Do last batch separately (whatever is left over)
+spnstrt = 1 + ((numbatches - 1) * fpbatchsize)
+fpbtch = fp[:, spnstrt:end]
+rv = CuArray{Float32}(undef, 3, size(fpbtch, 2))
+nblks = 2
+nthrds = ceil(Int, size(fpbtch, 2) / nblks)
+@cuda blocks=nblks threads=nthrds weighted_biot_savart_kernel(
+    rv,
+    fpbtch,
     vp,
     vc,
-    x->1,
-    2)
+    cir)
 
-# CUDA.CUDA.@profile external=true @cuda blocks=2 threads=3 weighted_biot_savart_kernel(
-#     rtnvelocities,
-#     fp,
-#     vp,
-#     vc,
-#     x->1,
-#     2)
+vel_num[:, spnstrt:end] .= Array(rv)
 
-print("rtnvelocities (after):")
-display(rtnvelocities)
-# # println("vel = ", vel)
-# # println("vel_true = ", vel_true)
-# println("Error (straight vortex): ", norm(vel - vel_true))
+vel_true = 1 ./ (2 .* pi .* y)
+# println("vel_true = ", vel_true)
+println("L2 Error (straight vortex): ", norm(vel_num[3, :] - vel_true))
+println("L2 Error (straight vortex, removed first point): ", norm(vel_num[3, 2:end] - vel_true[2:end]))
 
-# plt = plot(y, vel, markershape=:x, label="Numerical")
-# plot!(y, vel_true, label="Analytical")
-# display(plt)
+plt = plot(y, vel_num[3, :], markershape=:o, label="Numerical")
+plot!(y, vel_true, markershape=:x, label="Analytical")
+# xlims!(0, .0625)
+xlims!(0, 0.2)
+display(plt)
