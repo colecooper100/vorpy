@@ -2,6 +2,8 @@ using LinearAlgebra
 using Integrals
 
 
+################ Helper functions ################
+
 function sciml_integrals(fn, a, b)
     #=
     sciml_integrals(fn, a, b) = \int_a^b fn(u, p) du: the
