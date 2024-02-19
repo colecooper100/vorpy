@@ -35,7 +35,8 @@ Note: we rescaled the arc length
     actual length of the vortex path
     or each segment.
 ====================================#
-# Vortex path model (For now) linear
+# Vortex path model: points are connected
+# by straight lines.
 function vpathmodel(vorpps, segidx, ell)
     @inbounds pnt1 = SVector{3, Float32}(
         vorpps[1, segidx],
@@ -55,10 +56,12 @@ function xi(fp, vorpps, segidx, ell)
     @inbounds return fp .- vpmodel[1], vpmodel[2]
 end
 
+# Core model simple linear interpolation
 function vcoremodel(corerads, segidx, ell)
     @inbounds return corerads[segidx] + ell * (corerads[segidx+1] - corerads[segidx])
 end
 
+# Circulation model simple linear interpolation
 function vcircmodel(circs, segidx, ell)
     @inbounds return circs[segidx] + ell * (circs[segidx+UInt32(1)] - circs[segidx])
 end
@@ -191,7 +194,7 @@ function weighted_biot_savart_kernel(
         segindex = UInt32(1)
         while segindex <= num_vpsegs
             velocity = velocity .+ bs_uniform_trapezoidal_rule(
-                Int32(5_000),  # Number of integrations steps
+                Int32(100),  # Number of integrations steps
                 fldpnt,
                 vortexpathpoints,
                 vortexcoreradii,
@@ -223,9 +226,9 @@ along the y-axis.
 using Plots
 
 # Set problem parameters
-NUMVPSEGS = 2  # Number of vortex path segments
-NUMFP = 10_000_000  # Number of field points
-NUMTHREADS = 256
+NUMVPSEGS = 200  # Number of vortex path segments
+NUMFP = 1_000_000  # Number of field points
+NUMTHREADS = 1024
 NUMBLOCKS = ceil(Int, NUMFP / NUMTHREADS)
 
 # Define the vortex path
@@ -243,7 +246,7 @@ cucirs = CuArray{Float32}(cirs)
 
 # Define the field points
 y = zeros(Float32, NUMFP)
-y .= range(0, 2000, length=NUMFP)  # end point is included in range
+y .= range(0, 20, length=NUMFP)  # end point is included in range
 y[1] = 1e-3  # avoid divide by zero
 fps = zeros(Float32, 3, NUMFP)
 fps[2, :] = y
@@ -253,32 +256,32 @@ cufps = CuArray{Float32}(fps)
 # CuArray is mutable!!!
 curntvels = CuArray{Float32}(undef, 3, NUMFP)
 
-# Run the kernel function on the GPU
-# @device_code_warntype 
-# @device_code_llvm
-# @device_code_lowered
-@cuda blocks=NUMBLOCKS threads=NUMTHREADS weighted_biot_savart_kernel(
-    curntvels,
-    cufps,
-    cuvps,
-    cuvcs,
-    cucirs)
-
-# # Precompile the kernel
-# k = @cuda launch=false weighted_biot_savart_kernel(
+# # Run the kernel function on the GPU
+# # @device_code_warntype 
+# # @device_code_llvm
+# # @device_code_lowered
+# @cuda blocks=NUMBLOCKS threads=NUMTHREADS weighted_biot_savart_kernel(
 #     curntvels,
-#     cufp,
-#     cuvp,
-#     cuvc,
-#     cucir)
+#     cufps,
+#     cuvps,
+#     cuvcs,
+#     cucirs)
 
-# println("Max number of thread: ", CUDA.maxthreads(k))  # Queries the maximum amount of threads a kernel can use in a single block.
-# println("Register usage: ", CUDA.registers(k))  # Queries the register usage of a kernel.
-# println("Memory usage: ", CUDA.memory(k))  # Queries the local, shared and constant memory usage of a compiled kernel in bytes. Returns a named tuple.
+# Precompile the kernel
+k = @cuda launch=false weighted_biot_savart_kernel(
+    CuArray{Float32}(undef, 3, 1),
+    CuArray{Float32}(undef, 3, 1),
+    CuArray{Float32}(undef, 3, 1),
+    CuArray{Float32}(undef, 1),
+    CuArray{Float32}(undef, 1))
 
-# # Run the kernel
-# k(curntvel, cufp, cuvp, cuvc, cucir;
-#     blocks=NUMBLOCKS, threads=NUMTHREADS)
+println("Max number of thread: ", CUDA.maxthreads(k))  # Queries the maximum amount of threads a kernel can use in a single block.
+println("Register usage: ", CUDA.registers(k))  # Queries the register usage of a kernel.
+println("Memory usage: ", CUDA.memory(k))  # Queries the local, shared and constant memory usage of a compiled kernel in bytes. Returns a named tuple.
+
+# Run the kernel
+k(curntvels, cufps, cuvps, cuvcs, cucirs;
+    blocks=NUMBLOCKS, threads=NUMTHREADS)
 
 
 ################ Results ################
