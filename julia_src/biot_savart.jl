@@ -2,6 +2,8 @@ using LinearAlgebra
 using Integrals
 
 
+################ Helper functions ################
+
 function sciml_integrals(fn, a, b)
     #=
     sciml_integrals(fn, a, b) = \int_a^b fn(u, p) du: the
@@ -19,8 +21,8 @@ function uniform_trapezoidal_rule(fn, a, b; numsteps=100)
     return (0.5 .* (fn(a) + fn(b)) + sum(fn.(u[2:end-1]))) .* (b - a) ./ numsteps
 end
 
-# The start of making a unit test for sciml_integrals
-println("Error (sciml_integrals): ", sciml_integrals((x, p)->sin.(x), 0, pi) - (-cos(pi) + cos(0)))
+# # The start of making a unit test for sciml_integrals
+# println("Error (sciml_integrals): ", sciml_integrals((x, p)->sin.(x), 0, pi) - (-cos(pi) + cos(0)))
 
 
 function weighted_biot_savart_kernel(
@@ -64,7 +66,6 @@ function weighted_biot_savart_kernel(
             w = weightfn(xiellmag / c)
             return (w / xiellmag^3) .* dir
         end
-        # rnt_vel .+= integrator(integrand, 0, vsegmag)  # DEBUG
         rnt_vel .+= circulation .* integrator(integrand, 0, vsegmag) ./ (4*pi)
     end
 
@@ -96,7 +97,7 @@ vel = zeros(10)
 # Loop through the field points and calculate the velocity
 for i in axes(fp, 2)
     # vel[i] = weighted_biot_savart_kernel(fp[:, i], vp, vc, x->1, sciml_integrals)[3]
-    vel[i] = weighted_biot_savart_kernel(fp[:, i], vp, vc, x->1, uniform_trapezoidal_rule)[3]
+    vel[i] = weighted_biot_savart_kernel(fp[:, i], vp, vc, x->1, sciml_integrals)[3]
 end
 
 vel_true = 1 ./ (2 .* pi .* y)
