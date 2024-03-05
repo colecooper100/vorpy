@@ -7,7 +7,7 @@ function bernstein_polynomial_weight(delta)
     # by the core radius.
     # So, if delta > 5, then delta > 5 * core radius
     if delta < 0
-        @cuprintln("Input for the weight function was $(delta). Input should be between 0 and 1.")
+        throw(string("Input for the weight function was $(delta). Input should be between 0 and 1."))
         return Float32(0)
     elseif delta > 5  
         # Force the weight to be 1
