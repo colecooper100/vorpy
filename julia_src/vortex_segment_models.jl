@@ -126,26 +126,11 @@ function piecewise_linear_vortex(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2, params
 end
 
 
-# Get a path segment
-function get_segment(vpps, indx)
-    # Get starting point of segment
-    @inbounds vpp1 = SVector{3, Float32}(
-        vpps[1, indx],
-        vpps[2, indx],
-        vpps[3, indx])
-
-    # Get the ending point of segment
-    @inbounds vpp2 = SVector{3, Float32}(
-        vpps[1, indx+1],
-        vpps[2, indx+1],
-        vpps[3, indx+1])
-
-    return vpp1, vpp2
-end
 
 
 # ################### DEBUGGING ###################
 # using CUDA
+
 # #==============================================
 # -----------Straight Vortex Test Case-----------
 # We define a Lamb-Oseen vortex aligned with the
@@ -223,7 +208,12 @@ end
 
 # # @device_code_warntype
 # # @device_code_llvm
-# @cuda gpu_wrapper(curtn, ELL, cuvpp1, cuvpp2, cuvcr1, cuvcr2, cucir1, cucir2)
+# kern = @cuda launch=false gpu_wrapper(curtn, ELL, cuvpp1, cuvpp2, cuvcr1, cuvcr2, cucir1, cucir2)
+# # @cuda gpu_wrapper(curtn, ELL, cuvpp1, cuvpp2, cuvcr1, cuvcr2, cucir1, cucir2)
 
-# println("curtn = ")  # DEBUG
-# display(curtn)  # DEBUG
+# println("Max threads: ", CUDA.maxthreads(kern))
+# println("Register usage: ", CUDA.registers(kern))
+# println("Memory usage: ", CUDA.memory(kern))
+
+# # println("curtn = ")  # DEBUG
+# # display(curtn)  # DEBUG

@@ -5,7 +5,7 @@ function bernstein_polynomial_weight(delta)
     # the weight function delta \in [0, 1] where delta
     # is the magnitude of the spherical radius divided
     # by the core radius.
-    # So, if delta > 5, then delta > 5 * core radius
+    # So, if delta > 5, then radius > 5 * core radius
     if delta < 0
         throw(string("Input for the weight function was $(delta). Input should be between 0 and 1."))
         return Float32(0)
