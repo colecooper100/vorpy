@@ -182,8 +182,8 @@ vel_true_nocore = Float32.(1 ./ (2 .* pi .* x))
 vel_true_core = Float32.(1 ./ (2 .* pi .* x) .* (1 .- exp.(-x.^2 ./ (2 * vcrs[1]^2))))
 
 # println("vel_true = ", vel_true)
-# println("Total L2 error (straight vortex): ", norm(vel_num[3, :] - vel_true_core))
-# println("Avarage L2 error (straight vortex): ", sqrt(mean((vel_num[3, :] - vel_true_core).^2)))
+println("Total L2 error (straight vortex): ", norm(vel_num[2, :] - vel_true_core))
+println("Avarage L2 error (straight vortex): ", sqrt(mean((vel_num[2, :] - vel_true_core).^2)))
 
 # println("vel_true_core = ")  # DEBUG
 # display(vel_true_core)  # DEBUG
