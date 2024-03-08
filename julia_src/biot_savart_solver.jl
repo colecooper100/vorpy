@@ -1,4 +1,5 @@
 using CUDA: @cuda, blockIdx, blockDim, CuArray, threadIdx, CUDA
+using Base.Threads: @threads
 using StaticArrays: SVector
 using LinearAlgebra: norm, cross
 # using BenchmarkTools
@@ -23,6 +24,7 @@ function get_segment(vpps, vcrs, cirs, indx)
 
     @inbounds return vpp1, vpp2, vcrs[indx], vcrs[indx+1], cirs[indx], cirs[indx+1]
 end
+
 
 function weighted_biot_savart_kernel_cuda!(rtnvelocities, fps, vpps, vcrs, cirs)
 
@@ -51,14 +53,61 @@ function weighted_biot_savart_kernel_cuda!(rtnvelocities, fps, vpps, vcrs, cirs)
         # for loop with a step interval.
         segindx = UInt32(1)
 
-        # THE STEPSIZE HAS A SIGNIFICANT IMPACT ON
-        # PERFORMANCE (OBVIOUSLY). I HAVE FOUND
-        # THAT A STEPSIZE OF 1 IS THE LARGEST THAT
-        # CAN BE USED WITHOUT OVERLY AFFECTING THE
-        # ACCURACY OF THE SOLUTION.
-        STEPSIZE = Float32(1)  # DEBUG
         while segindx <= num_vsegs
-            segvel = bs_integrator(STEPSIZE, fp, get_segment(vpps, vcrs, cirs, segindx)...)
+            # The stepsize of the integrator is some
+            # fraction of the average core diameter of
+            # the segment.
+            # THE stepsize HAS A SIGNIFICANT IMPACT ON
+            # PERFORMANCE (OBVIOUSLY). I HAVE FOUND
+            # THAT A stepsize OF 1 IS THE LARGEST THAT
+            # CAN BE USED WITHOUT OVERLY AFFECTING THE
+            # ACCURACY OF THE SOLUTION.
+            stepsize = (vcrs[segindx] + vcrs[segindx+1]) / Float32(2) / Float32(1)
+            segvel = bs_integrator(stepsize, fp, get_segment(vpps, vcrs, cirs, segindx)...)
+            velocity = velocity .+ segvel
+            segindx += UInt32(1)  # Advance the loop counter
+        end
+
+        @inbounds rtnvelocities[:, idx] .= velocity
+    end
+
+    return nothing
+end
+
+
+function weighted_biot_savart_kernel_cpu!(rtnvelocities, fps, vpps, vcrs, cirs)
+
+    # Compute the number of vortex path segments
+    num_vsegs = UInt32(size(vpps, 2)) - UInt32(1)
+
+    # Loop over the field points
+    @threads for idx in axes(fps, 2)
+        # Set the initial flow velocity
+        velocity = SVector{3, Float32}(0, 0, 0)
+
+        # Get the field point
+        @inbounds fp = SVector{3, Float32}(
+            fps[1, idx],
+            fps[2, idx],
+            fps[3, idx])
+
+        # Step through each vortex path segment.
+        # We are using a while loop because the CUDA.jl
+        # docs says this is more efficient than using a
+        # for loop with a step interval.
+        segindx = UInt32(1)
+
+        while segindx <= num_vsegs
+            # The stepsize of the integrator is some
+            # fraction of the average core diameter of
+            # the segment.
+            # THE stepsize HAS A SIGNIFICANT IMPACT ON
+            # PERFORMANCE (OBVIOUSLY). I HAVE FOUND
+            # THAT A stepsize OF 1 IS THE LARGEST THAT
+            # CAN BE USED WITHOUT OVERLY AFFECTING THE
+            # ACCURACY OF THE SOLUTION.
+            stepsize = (vcrs[segindx] + vcrs[segindx+1]) / Float32(2) / Float32(1)
+            segvel = bs_integrator(stepsize, fp, get_segment(vpps, vcrs, cirs, segindx)...)
             velocity = velocity .+ segvel
             segindx += UInt32(1)  # Advance the loop counter
         end
@@ -74,18 +123,18 @@ end
 ################ User API ################
 
 # Precompile the kernel
-_biot_savart_solver = @cuda launch=false weighted_biot_savart_kernel_cuda!(
+_precompiled_weight_bs_kernel = @cuda launch=false weighted_biot_savart_kernel_cuda!(
     CuArray{Float32}(undef, 3, 1),
     CuArray{Float32}(undef, 3, 1),
     CuArray{Float32}(undef, 3, 1),
     CuArray{Float32}(undef, 1),
     CuArray{Float32}(undef, 1))
 
-println("Max number of thread: ", CUDA.maxthreads(_biot_savart_solver))  # Queries the maximum amount of threads a kernel can use in a single block.
-println("Register usage: ", CUDA.registers(_biot_savart_solver))  # Queries the register usage of a kernel.
-println("Memory usage: ", CUDA.memory(_biot_savart_solver))  # Queries the local, shared and constant memory usage of a compiled kernel in bytes. Returns a named tuple.
+println("Max number of thread: ", CUDA.maxthreads(_precompiled_weight_bs_kernel))  # Queries the maximum amount of threads a kernel can use in a single block.
+println("Register usage: ", CUDA.registers(_precompiled_weight_bs_kernel))  # Queries the register usage of a kernel.
+println("Memory usage: ", CUDA.memory(_precompiled_weight_bs_kernel))  # Queries the local, shared and constant memory usage of a compiled kernel in bytes. Returns a named tuple.
 
-function bs_solve(fieldpoints, vorpathpoints, vorcorrads, vorcircs)
+function bs_solve(fieldpoints, vorpathpoints, vorcorrads, vorcircs; device="cpu")
     """
     bs_solve(fieldpoints, vorpathpoints, vorcorrads, vorcircs)
 
@@ -98,20 +147,37 @@ function bs_solve(fieldpoints, vorpathpoints, vorcorrads, vorcircs)
     - vorcorrads: M array
     - vorcircs: M array
     """
-    num_threads = CUDA.maxthreads(_biot_savart_solver)
     num_fps = size(fieldpoints, 2)
-    num_blocks = ceil(Int, num_fps / num_threads)
-    ret_vels = CuArray{Float32}(undef, 3, num_fps)
 
-    # Run the kernel function on the GPU
-    _biot_savart_solver(
-        ret_vels,
-        CuArray{Float32}(fieldpoints),
-        CuArray{Float32}(vorpathpoints),
-        CuArray{Float32}(vorcorrads),
-        CuArray{Float32}(vorcircs);
-        blocks=num_blocks,
-        threads=num_threads)
+    if device == "cuda"
+        # Create an array to store the return velocities
+        ret_vels = CuArray{Float32}(undef, 3, num_fps)
+
+        # Set the number of threads and blocks
+        num_threads = CUDA.maxthreads(_precompiled_weight_bs_kernel)
+        num_blocks = ceil(Int, num_fps / num_threads)
+        # Run the kernel function on the GPU
+        _precompiled_weight_bs_kernel(
+            ret_vels,
+            CuArray{Float32}(fieldpoints),
+            CuArray{Float32}(vorpathpoints),
+            CuArray{Float32}(vorcorrads),
+            CuArray{Float32}(vorcircs);
+            blocks=num_blocks,
+            threads=num_threads)
+    elseif device == "cpu"
+        # Create an array to store the return velocities
+        ret_vels = Array{Float32}(undef, 3, num_fps)
+
+        weighted_biot_savart_kernel_cpu!(
+            ret_vels,
+            fieldpoints,
+            vorpathpoints,
+            vorcorrads,
+            vorcircs)
+    else
+        throw(ArgumentError("Invalid device: \"$(device)\", choices are \"cpu\" or \"cuda\""))
+    end
 
     return Array(ret_vels)
 end
@@ -162,17 +228,14 @@ fps[1, :] .= x
 
 
 
-###### Run on the CPU ######
+####### Run #######
+# # Benchmark 10_000 field points
+# # CUDA: 7.461 ms, 118.67 KB, 41 allocs
+# # CPU: 130.879 ms, 237.08 KB, 33 allocs
+# # @benchmark CUDA.@sync bs_solve($fps, $vpps, $vcrs, $cirs; device="cuda")
+# @benchmark Threads.@sync bs_solve($fps, $vpps, $vcrs, $cirs; device="cpu")
 
-
-
-
-# ###### Run on the GPU ######
-
-# @benchmark CUDA.@sync bs_solve($fps, $vpps, $vcrs, $cirs)
-# println("----------------sol----------------")
-# println(sol)
-vel_num = bs_solve(fps, vpps, vcrs, cirs)
+vel_num = bs_solve(fps, vpps, vcrs, cirs; device="cpu")
 plot(x[1:100_000:end], vel_num[2, 1:100_000:end], markershape=:x, label="Numerical")
 
 # Analytical solution (infinitesimally thin vortex)
@@ -201,10 +264,10 @@ ylims!(0, .1)
 title!(pltvelmag, "Straight Vortex Test Case,\nVelocity at every $(stride)th Field Point")
 display(pltvelmag)
 
-# plterror = plot(y[1:stride:end], abs.(vel_num[3, 1:stride:end] .- vel_true[1:stride:end]), markershape=:x, label="Error")
-# title!(plterror, "Straight Vortex Test Case - Absolute Error")
-# xlabel!("y")
-# ylabel!("Absolute Error")
+plterror = plot(x[1:stride:end], abs.(vel_num[2, 1:stride:end] .- vel_true_core[1:stride:end]), markershape=:x, label="Error")
+title!(plterror, "Straight Vortex Test Case - Absolute Error")
+xlabel!("y")
+ylabel!("Absolute Error")
 # ylims!(0, .1)
 
-# # display(plterror)
+plot(pltvelmag, plterror, layout=(2, 1), legend=false)
