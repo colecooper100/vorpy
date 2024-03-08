@@ -20,19 +20,10 @@ function bs_integrand_segment(ell, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
     return (weight * cir / ximag^3) .* dir, rtnell, endofseg
 end
 
-
-
 # Integrate along a given path segment
 # F(x) = \int_a^b f(x) dx \approx \sum_{i=1}^{N} (f(x_{i-1}) + f(x_i))/2 * \Delta x_i
 # where \Delta x_i = x_i - x_{i-1}
 function bs_nonuniform_trapezoidal_rule_segment(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
-    # I BELIEVE SOMETHING IS INEFFICENT HERE. THE MAX
-    # NUMBER OF THREADS I CAN USE ON THIS METHOD IS 512
-    # (HALF) BUT I DON'T KNOW IF THERE IS ANYTHING
-    # I CAN DO ABOUT IT. I THINK THE WHILE LOOP IS THE
-    # PROBLEM. SPECIFICALLY, I THINK WE HAVE TO WAIT
-    # FOR ALL OF THE THREADS TO GET THROUGH THE LOOP.
-    
     # Initialize variables used in the loop
     # totell = Float32(0)
     sol = SVector{3, Float32}(0, 0, 0)

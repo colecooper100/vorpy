@@ -1,6 +1,7 @@
 using StaticArrays: SVector
 using LinearAlgebra: norm
 
+
 #=============================================
 I don't think CUDA supports nested functions,
 so, functions used in the kernel must be

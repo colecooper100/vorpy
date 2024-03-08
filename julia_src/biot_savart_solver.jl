@@ -26,16 +26,42 @@ function get_segment(vpps, vcrs, cirs, indx)
 end
 
 
-function weighted_biot_savart_kernel_cuda!(rtnvelocities, fps, vpps, vcrs, cirs)
-
+function velocity_field_point(fp, vpps, vcrs, cirs)
     # Compute the number of vortex path segments
     num_vsegs = UInt32(size(vpps, 2)) - UInt32(1)
 
-    # Compute the global index of the thread
-    idx = (blockIdx().x - Int32(1)) * blockDim().x + threadIdx().x
-
     # Set the initial flow velocity
     velocity = SVector{3, Float32}(0, 0, 0)
+
+    # Step through each vortex path segment.
+    # We are using a while loop because the CUDA.jl
+    # docs says this is more efficient than using a
+    # for loop with a step interval.
+    segindx = UInt32(1)
+
+    while segindx <= num_vsegs
+        # The stepsize of the integrator is some
+        # fraction of the average core diameter of
+        # the segment.
+        # THE stepsize HAS A SIGNIFICANT IMPACT ON
+        # PERFORMANCE (OBVIOUSLY). I HAVE FOUND
+        # THAT A stepsize OF 1 IS THE LARGEST THAT
+        # CAN BE USED WITHOUT OVERLY AFFECTING THE
+        # ACCURACY OF THE SOLUTION.
+        stepsize = (vcrs[segindx] + vcrs[segindx+1]) / Float32(2) / Float32(1)
+        segvel = bs_integrator(stepsize, fp, get_segment(vpps, vcrs, cirs, segindx)...)
+        velocity = velocity .+ segvel
+        segindx += UInt32(1)  # Advance the loop counter
+    end
+
+    return velocity
+end
+
+
+function weighted_biot_savart_kernel_cuda!(rtnvelocities, fps, vpps, vcrs, cirs)
+
+    # Compute the global index of the thread
+    idx = (blockIdx().x - Int32(1)) * blockDim().x + threadIdx().x
 
     # Check if the thread index is in bounds
     if idx <= size(fps, 2)
@@ -46,27 +72,8 @@ function weighted_biot_savart_kernel_cuda!(rtnvelocities, fps, vpps, vcrs, cirs)
             fps[1, idx],
             fps[2, idx],
             fps[3, idx])
-
-        # Step through each vortex path segment.
-        # We are using a while loop because the CUDA.jl
-        # docs says this is more efficient than using a
-        # for loop with a step interval.
-        segindx = UInt32(1)
-
-        while segindx <= num_vsegs
-            # The stepsize of the integrator is some
-            # fraction of the average core diameter of
-            # the segment.
-            # THE stepsize HAS A SIGNIFICANT IMPACT ON
-            # PERFORMANCE (OBVIOUSLY). I HAVE FOUND
-            # THAT A stepsize OF 1 IS THE LARGEST THAT
-            # CAN BE USED WITHOUT OVERLY AFFECTING THE
-            # ACCURACY OF THE SOLUTION.
-            stepsize = (vcrs[segindx] + vcrs[segindx+1]) / Float32(2) / Float32(1)
-            segvel = bs_integrator(stepsize, fp, get_segment(vpps, vcrs, cirs, segindx)...)
-            velocity = velocity .+ segvel
-            segindx += UInt32(1)  # Advance the loop counter
-        end
+        
+        velocity = velocity_field_point(fp, vpps, vcrs, cirs)
 
         @inbounds rtnvelocities[:, idx] .= velocity
     end
@@ -77,40 +84,15 @@ end
 
 function weighted_biot_savart_kernel_cpu!(rtnvelocities, fps, vpps, vcrs, cirs)
 
-    # Compute the number of vortex path segments
-    num_vsegs = UInt32(size(vpps, 2)) - UInt32(1)
-
     # Loop over the field points
     @threads for idx in axes(fps, 2)
-        # Set the initial flow velocity
-        velocity = SVector{3, Float32}(0, 0, 0)
-
-        # Get the field point
+        # Get a field point from the batch
         @inbounds fp = SVector{3, Float32}(
             fps[1, idx],
             fps[2, idx],
             fps[3, idx])
-
-        # Step through each vortex path segment.
-        # We are using a while loop because the CUDA.jl
-        # docs says this is more efficient than using a
-        # for loop with a step interval.
-        segindx = UInt32(1)
-
-        while segindx <= num_vsegs
-            # The stepsize of the integrator is some
-            # fraction of the average core diameter of
-            # the segment.
-            # THE stepsize HAS A SIGNIFICANT IMPACT ON
-            # PERFORMANCE (OBVIOUSLY). I HAVE FOUND
-            # THAT A stepsize OF 1 IS THE LARGEST THAT
-            # CAN BE USED WITHOUT OVERLY AFFECTING THE
-            # ACCURACY OF THE SOLUTION.
-            stepsize = (vcrs[segindx] + vcrs[segindx+1]) / Float32(2) / Float32(1)
-            segvel = bs_integrator(stepsize, fp, get_segment(vpps, vcrs, cirs, segindx)...)
-            velocity = velocity .+ segvel
-            segindx += UInt32(1)  # Advance the loop counter
-        end
+        
+        velocity = velocity_field_point(fp, vpps, vcrs, cirs)
 
         @inbounds rtnvelocities[:, idx] .= velocity
     end
@@ -235,7 +217,7 @@ fps[1, :] .= x
 # # @benchmark CUDA.@sync bs_solve($fps, $vpps, $vcrs, $cirs; device="cuda")
 # @benchmark Threads.@sync bs_solve($fps, $vpps, $vcrs, $cirs; device="cpu")
 
-vel_num = bs_solve(fps, vpps, vcrs, cirs; device="cpu")
+vel_num = bs_solve(fps, vpps, vcrs, cirs; device="cuda")
 plot(x[1:100_000:end], vel_num[2, 1:100_000:end], markershape=:x, label="Numerical")
 
 # Analytical solution (infinitesimally thin vortex)
