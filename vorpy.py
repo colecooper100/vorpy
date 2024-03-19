@@ -32,5 +32,8 @@ finally:
     _available_devices['cpu'] = _bs_solve_cpu
 
     def bs_solve(fps, vpps, vcrds, vcirs, device='cpu'):
-        return _available_devices[device](fps, vpps, vcrds, vcirs)
+        try:
+            return _available_devices[device](fps, vpps, vcrds, vcirs)
+        except KeyError:
+            raise ValueError(f'Invalid device: \'{device}\'. Available devices: {list(_available_devices.keys())}')
 
