@@ -7,6 +7,7 @@ jl.Pkg.activate('.')
 
 _available_devices = {}
 
+# Load the CUDA Biot-Savart solver if available
 try:
     # Run the Julia script to load the CUDA Biot-Savart
     # function.
