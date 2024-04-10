@@ -1,6 +1,7 @@
 using StaticArrays: SVector
 using LinearAlgebra: norm, cross
 
+println("Inside biot_savart_solver_vortex_line.jl... ", "PWD: ", pwd())  # DEBUG
 include("biot_savart_segment_integrator.jl")
 bs_integrator(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2) = bs_nonuniform_trapezoidal_rule_segment(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
 

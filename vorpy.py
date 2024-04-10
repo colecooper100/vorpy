@@ -9,9 +9,11 @@ _available_devices = {}
 
 # Load the CUDA Biot-Savart solver if available
 try:
-    # Run the Julia script to load the CUDA Biot-Savart
-    # function.
+    # Load CUDA Biot-Savart function
     jl.include('julia_src/weighted_biot_savart_kernel_cuda.jl')
+    # Load CUDA vortex dynamics function
+    # jl.include('julia_src/vortex_path_dynamics_kernel_cuda.jl')
+
     # User API
     def _bs_solve_cuda(fps, vpps, vcrds, vcirs):
         return np.transpose(jl.bs_solve_cuda(np.transpose(fps),
@@ -23,9 +25,12 @@ except:
     print('CUDA version of Biot-Savart solver not available; set bs_solve device to \'cpu\'')
 
 finally:
-    # Run the Julia script to load the CPU Biot-Savart
-    # function.
-    jl.include('julia_src/weighted_biot_savart_kernel_cpu.jl')  # GPU version
+    # Load CPU Biot-Savart function.
+    jl.include('julia_src/weighted_biot_savart_kernel_cpu.jl')
+    # Load CPU vortex dynamics
+    jl.include('julia_src/vortex_evolve_adaptive_dormand_prince.jl')
+
+    # User API
     def _bs_solve_cpu(fps, vpps, vcrds, vcirs):
         return np.transpose(jl.bs_solve_cpu(np.transpose(fps),
                                             np.transpose(vpps), vcrds, vcirs))

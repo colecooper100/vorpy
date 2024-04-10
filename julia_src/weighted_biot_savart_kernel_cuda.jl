@@ -1,7 +1,7 @@
 using CUDA: @cuda, blockIdx, blockDim, CuArray, threadIdx, CUDA
 using StaticArrays: SVector
 
-include("biot_savart_solver_vortex_line.jl")
+include("src/biot_savart_solver_vortex_line.jl")
 
 
 function weighted_biot_savart_kernel_cuda!(rtnvelocities, fps, vpps, vcrs, cirs)

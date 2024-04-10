@@ -1,13 +1,10 @@
-using Base.Threads: @threads
 using StaticArrays: SVector
 
-include("biot_savart_solver_vortex_line.jl")
+include("src/biot_savart_solver_vortex_line.jl")
 
 
 function weighted_biot_savart_kernel_cpu!(rtnvelocities, fps, vpps, vcrs, cirs)
-
     # Loop over the field points
-    # @threads for idx in axes(fps, 2)
     for idx in axes(fps, 2)
         # Get a field point from the batch
         @inbounds fp = SVector{3, Float32}(
@@ -22,6 +19,9 @@ function weighted_biot_savart_kernel_cpu!(rtnvelocities, fps, vpps, vcrs, cirs)
 
     return nothing
 end
+
+
+################### USER API ###################
 
 function bs_solve_cpu(fieldpoints, vorpathpoints, vorcorrads, vorcircs)
     """

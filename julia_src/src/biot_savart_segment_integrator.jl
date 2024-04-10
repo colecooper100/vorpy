@@ -1,6 +1,7 @@
 using StaticArrays: SVector
 using LinearAlgebra: norm, cross
 
+println("Inside biot_savart_segment_integrator.jl...")  # DEBUG
 include("vortex_segment_models.jl")
 include("bernstein_polynomial_weight.jl")
 
@@ -14,10 +15,14 @@ weight_function(delta) = bernstein_polynomial_weight(delta)
 function bs_integrand_segment(ell, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
     vpp, vtan, vcr, cir, rtnell, endofseg = vortex_segment_model(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
     xi = fp .- vpp
-    ximag = norm(xi)
-    dir = cross(vtan, xi)
-    weight = weight_function(ximag / vcr)
-    return (weight * cir / ximag^3) .* dir, rtnell, endofseg
+    if norm(xi) == 0
+        return SVector{3, Float32}(0, 0, 0), rtnell, endofseg
+    else
+        ximag = norm(xi)
+        dir = cross(vtan, xi)
+        weight = weight_function(ximag / vcr)
+        return (weight * cir / ximag^3) .* dir, rtnell, endofseg
+    end
 end
 
 # Integrate along a given path segment

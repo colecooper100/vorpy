@@ -1,21 +1,3 @@
-#==========================================
-Use the Dormand-Prince method to
-solve:
-    \dot x(t) = v(t)
-for:
-    - [ ] constant v
-    - [ ] v(t) = x0 + 9.8*t
-        (assume x0 = 0) answer should be
-        x(t) = x0 + v*t + 0.5*9.8*t^2
-
-Once RKDP method is validated,
-implement for the vortex path.
-
-Start with a constant stepsize then 
-make an adaptive method
-==========================================#
-
-
 # \vec x' = f(t, \vec x)
 function dormand_prince_step(fn, t0, x0, stepsize)
     c2 = Float32(1/5)
