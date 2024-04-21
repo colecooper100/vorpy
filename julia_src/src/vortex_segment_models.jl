@@ -2,28 +2,19 @@ using StaticArrays: SVector
 using LinearAlgebra: norm
 
 
-#=============================================
-I don't think CUDA supports nested functions,
-so, functions used in the kernel must be
-defined as stand alone functions (outside of
-the kernel).
+# println("Inside vortex_segment_models.jl...")  # DEBUG
 
-Note: The code doesn't have to be physically
-outside of the kernel, you just can't assume you
-have access to any variables local to the outer
-function.
-=============================================#
 
 #=============================================
 ---------------Segment Models----------------
-I wanted to setup the model of the vortex path
-as a function that took the arc length variable
-and returned propteries of the vortex at that
-point. If for no other reason then this would
-match the way the problem is defined.
-Some of the problems I encounted when setting
-up a model which takes arc length as Input:
-- Integration is done along the entire leng9th
+I wanted the vortex path model to be a function
+whichs takes as input the arc length variable
+and returns propteries of the vortex at that
+arc length (if for no other reason then this
+would match the way the problem is defined.)
+
+Some of the problems I encounted:
+- Integration is done along the entire length
     of the vortex path. This means you need to
     know the total length of the vortex path
     or you need to take steps until you reach
@@ -98,6 +89,7 @@ function piecewise_linear_vortex(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2, params
     # will depend on the model)
     seg = vpp2 .- vpp1
     seglen = norm(seg)
+    # println("seg = ", seg)  # DEBUG
 
     # The tagent of the segment is constant so
     # we can compute it here

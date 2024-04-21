@@ -1,25 +1,33 @@
 using StaticArrays: SVector
 using LinearAlgebra: norm, cross
 
-println("Inside biot_savart_segment_integrator.jl...")  # DEBUG
-include("vortex_segment_models.jl")
-include("bernstein_polynomial_weight.jl")
 
-# Set vortex segment model
+# println("Inside biot_savart_segment_integrator.jl...")  # DEBUG
+
+
+###### Set the models for vortex segment ######
+include("vortex_segment_models.jl")
 vortex_segment_model(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2) = piecewise_linear_vortex(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
 
+
+###### Set the models for the BS weight function ######
+include("bernstein_polynomial_weight.jl")
 # Set weight function
 weight_function(delta) = bernstein_polynomial_weight(delta)
 
+
+###### Define BS integrand function ######
 # The integrand always expects ell \in [0, seglen]
 function bs_integrand_segment(ell, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
     vpp, vtan, vcr, cir, rtnell, endofseg = vortex_segment_model(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
+    # println("vtan = ", vtan)  # DEBUG
     xi = fp .- vpp
     if norm(xi) == 0
         return SVector{3, Float32}(0, 0, 0), rtnell, endofseg
     else
         ximag = norm(xi)
         dir = cross(vtan, xi)
+        # println("dir = ", dir)  # DEBUG
         weight = weight_function(ximag / vcr)
         return (weight * cir / ximag^3) .* dir, rtnell, endofseg
     end

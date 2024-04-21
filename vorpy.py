@@ -1,6 +1,8 @@
 import numpy as np
 from juliacall import Main as jl
 
+# NOTE: vorpy can take up to 20 seconds to load
+
 # Activate Julia environment in the
 # current working directory (which should be vorpy)
 jl.Pkg.activate('.')
@@ -11,8 +13,6 @@ _available_devices = {}
 try:
     # Load CUDA Biot-Savart function
     jl.include('julia_src/weighted_biot_savart_kernel_cuda.jl')
-    # Load CUDA vortex dynamics function
-    # jl.include('julia_src/vortex_path_dynamics_kernel_cuda.jl')
 
     # User API
     def _bs_solve_cuda(fps, vpps, vcrds, vcirs):
@@ -27,8 +27,6 @@ except:
 finally:
     # Load CPU Biot-Savart function.
     jl.include('julia_src/weighted_biot_savart_kernel_cpu.jl')
-    # Load CPU vortex dynamics
-    jl.include('julia_src/vortex_evolve_adaptive_dormand_prince.jl')
 
     # User API
     def _bs_solve_cpu(fps, vpps, vcrds, vcirs):
