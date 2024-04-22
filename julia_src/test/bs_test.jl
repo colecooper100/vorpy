@@ -1,32 +1,34 @@
 using Plots
+include("../src/timing.jl")
 
+###### Import BS solver ######
+print("Importing Biot-Savart solver... ")
 
-###### Set BS function ######
-print("Importing Biot-Savart solver...")
-@time begin
-    include("../weighted_biot_savart_kernel_cpu.jl")
-end
-# Set Biot-Savart solver function
-bsfn(fps, vpps, cdms, circs) = bs_solve_cpu(fps, vpps, cdms, circs)
+t0 = time_ns()  # TIMING
+include("../weighted_biot_savart_kernel_cpu.jl")
+println("Done ", elapsed_time(t0), " seconds.")  # TIMING
 
 println()  # Blank line
 
 
-###### Specify test parameters ######
+###### Set Biot-Savart solver function ######
+bsfn(fps, vpps, cdms, circs; kwargs...) = weighted_biot_savart_solver_cpu(fps, vpps, cdms, circs; kwargs...)
+
+
+###### Specify vortex and test parameters ######
 ENDPOINTS_LO = [-1000, 1000]
-NUMSEGS_LO = 10
-COREDIAMETER_LO = 0.0001
+NUMSEGS_LO = 2  # was 10
+COREDIAMETER_LO = 0.0001  # was 5.0
 CIRCULATION_LO = 10.0
 ZPLANE_LO = 0.0
-NUMVELSAMP_LO = 100
-println("Lamb-Oseen Vortex Parameters:")
-println("Endpoints: ", ENDPOINTS_LO)
-println("Number of segments: ", NUMSEGS_LO)
-println("Core diameter: ", COREDIAMETER_LO)
-println("Circulation: ", CIRCULATION_LO)
-println("Z-plane: ", ZPLANE_LO)
-println("Number of velocity samples: ", NUMVELSAMP_LO)
-
+NUMVELSAMP_LO = 50
+println("Making Lamb-Oseen Vortex...")
+println("* Endpoints: ", ENDPOINTS_LO)
+println("* Number of segments: ", NUMSEGS_LO)
+println("* Core diameter: ", COREDIAMETER_LO)
+println("* Circulation: ", CIRCULATION_LO)
+println("* Z-plane: ", ZPLANE_LO)
+println("* Number of velocity samples: ", NUMVELSAMP_LO)
 println()  # Blank line
 
 
@@ -80,13 +82,12 @@ function analytical_solution_lo(fps, corediameters, circulations)
     term2 = reshape(term2, 1, length(term2))
 
     # println("Size of direction: ", size(direction))  # DEBUG
-    return term1 .* (1 .- term2) .* direction
+    # finite solution, infinite solution
+    return term1 .* (1 .- term2) .* direction, term1 .* direction
 end
 
 
 ###### Make Lamb-Oseen vortex ######
-println("Making Lamb-Oseen vortex...")
-
 # Make the vortex path
 # Align the vortex with the z-axis
 vpps_lo = zeros(3, NUMSEGS_LO + 1)
@@ -104,11 +105,9 @@ crdms_lo = ones(NUMSEGS_LO + 1) .* COREDIAMETER_LO
 # use a constant circulation.
 circs_lo = ones(NUMSEGS_LO + 1) .* CIRCULATION_LO
 
-println()  # Blank line
-
 
 ###### Compute and plot the analytical solution ######
-println("Generating 2D plot of the analytical solution...")
+println("Making 2D velocity plot of analytical solution...")
 
 # Make some field points to plot the analytical
 # solution
@@ -118,11 +117,9 @@ fps_lo[2, :] .= [0, 0.707, 1, 0.707, 0, -0.707, -1, -0.707]
 
 # Compute the analytical solution
 velocities_lo = Array{Float64, 2}(undef, size(fps_lo))
-print("Computing analytical solution...")
-@time begin
-    for i in axes(fps_lo, 2)
-        velocities_lo[:, i] .= analytical_solution_lo(reshape(fps_lo[:, i], 3, 1), crdms_lo, circs_lo)
-    end
+for i in axes(fps_lo, 2)
+    vel_lo = analytical_solution_lo(reshape(fps_lo[:, i], 3, 1), crdms_lo, circs_lo)
+    velocities_lo[:, i] .= vel_lo[1]  # store finite solution
 end
 
 # Make a quiver plot of the analytical solution
@@ -136,7 +133,7 @@ println()  # Blank line
 
 
 ###### Compute and compare the velocity profile ######
-println("Computing and comparing the velocity profile of the analytical and numerical solutions...")
+println("Comparing numerical solution to analytical...")
 
 # Make the field points
 xvec_lo = range(0.1, 40, length=NUMVELSAMP_LO)
@@ -145,14 +142,21 @@ zvec_lo = ones(length(xvec_lo)) .* ZPLANE_LO
 fps_lo = stack([xvec_lo, yvec_lo, zvec_lo], dims=1)
 # println("Size of fps_lo: ", size(fps_lo))  # DEBUG
 
-# Compute solutions
-print("Computing analytical solution... ")
-@time anavel_lo = analytical_solution_lo(fps_lo, crdms_lo, circs_lo)
-println()  # Move curser to next line
-print("Computing numerical solution... ")
-@time bsvel_lo = bsfn(fps_lo, vpps_lo, crdms_lo, circs_lo)
-err_lo, RMSerr_lo = ERR(bsvel_lo, anavel_lo)
-println("Total RMS Error: ", RMSerr_lo)
+# Compute analytical solution
+print("* Computing analytical solution... ")
+t0 = time_ns()  # TIMING
+ana_vel_fin_lo, ana_vel_inf_lo = analytical_solution_lo(fps_lo, crdms_lo, circs_lo)
+println("Done ", elapsed_time(t0), " seconds.")  # TIMING
+
+# Compute numerical solution
+println("* Computing numerical solution... ")
+t0 = time_ns()  # TIMING
+bsvel_lo = bsfn(fps_lo, vpps_lo, crdms_lo, circs_lo; verbose=true)
+println("* Numerical solution done ", elapsed_time(t0), " seconds.")  # TIMING
+
+# Compute the error
+err_lo, RMSerr_lo = ERR(bsvel_lo, ana_vel_fin_lo)
+println("* Total RMS Error: ", RMSerr_lo)
 # println("Size of anavel_lo: ", size(anavel_lo))  # DEBUG
 # println("Size of bsvel_lo: ", size(bsvel_lo))  # DEBUG
 # println("Size of err_lo: ", size(err_lo))  # DEBUG
@@ -160,7 +164,7 @@ println("Total RMS Error: ", RMSerr_lo)
 println()  # Blank line
 
 # Plot the error
-println("Generating 2D plot of the error...")
+println("Generating plot of the error...")
 errplt_lo = plot(xvec_lo, abs.(err_lo[1, :]), label="x-error")
 plot!(xvec_lo, abs.(err_lo[2, :]), label="y-error")
 plot!(xvec_lo, abs.(err_lo[3, :]), label="z-error")
@@ -172,9 +176,12 @@ display(errplt_lo)
 # Plot the velocity profile
 println()  # Blank line
 println("Generating plot of the velocity profile...")
-velprofplt_lo = plot(xvec_lo, anavel_lo[2, :], label="Analytical solution")
+velprofplt_lo = plot(xvec_lo, ana_vel_fin_lo[2, :], label="Analy sol finite")
+plot!(xvec_lo, ana_vel_inf_lo[2, :], label="Analy sol infinite")
+vline!([COREDIAMETER_LO, COREDIAMETER_LO*5, COREDIAMETER_LO*10], label="Core Diameters (1, 5x, 10x)")
 plot!(xvec_lo, bsvel_lo[2, :], label="Biot-Savart solution")
 title!("Velocity Profile of Lamb-Oseen Vortex\nat z=$(ZPLANE_LO)")
 xlabel!("x")
 ylabel!("y")
+# ylims!(0, 0.6)
 display(velprofplt_lo)
