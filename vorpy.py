@@ -26,7 +26,7 @@ except:
 
 finally:
     # Load CPU Biot-Savart function.
-    jl.include('julia_src/weighted_biot_savart_kernel_cpu.jl')
+    jl.include('julia_src/weighted_biot_savart_solver_cpu.jl')
 
     # User API
     def _bs_solve_cpu(fps, vpps, vcrds, vcirs):

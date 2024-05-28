@@ -84,7 +84,7 @@ Output:
     - endofseg: boolean, true if the end of the
         segment was reached
 =============================================#
-function piecewise_linear_vortex(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2, params=nothing)
+function piecewise_linear_vortex_segment_model(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2, params=nothing)
     # Compute length of segment (how this is done
     # will depend on the model)
     seg = vpp2 .- vpp1

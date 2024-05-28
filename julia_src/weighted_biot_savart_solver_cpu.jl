@@ -1,11 +1,24 @@
+#===============================================
+This script implements a CPU version of the
+weighted Biot-Savart solver. The solver loops
+over all field points and returns a velocity
+vector of langth equal to the number of field
+points.
+The reason this file contains the code for
+looping through field points is to allow for
+parallelized. The way the CPU has to be
+parallelized is different from the GPU, so we
+have separate implementations for each. 
+===============================================#
+
+
+###### Import modules and local scrips ######
 using StaticArrays: SVector
+include("src/weighted_biot_savart_solver/weighted_biot_savart_for_one_field_point.jl")
 
 
-include("src/weighted_biot_savart.jl")
-
-
-function weighted_biot_savart_solver_cpu(# returnarray,
-                                            fieldpoints,
+###### Function ######
+function weighted_biot_savart_solver_cpu(fieldpoints,
                                             vorpathpoints,
                                             cordiameters,
                                             circulations;
@@ -16,12 +29,13 @@ function weighted_biot_savart_solver_cpu(# returnarray,
 
     # TIMING
     if verbose
-        include("/home/user1/Dropbox/code/vorpy/julia_src/src/timing.jl")
+        include(string(pwd(), "/julia_src/src/utility_functions/utility_functions.jl"))
         println("Inside weighted_biot_savart_solver_cpu...")
         println("* Looping over all field points...")
         # Initial time for entire execution
         t0 = time_ns()
     end
+    
     # Loop over the field points
     for fpindx in axes(fieldpoints, 2)
         # Get a field point from the batch
@@ -32,16 +46,16 @@ function weighted_biot_savart_solver_cpu(# returnarray,
         
         # TIMING
         if verbose
-            #"\e[1K", "\e[1G", 
+            # ANSI escape codes "\e[1K", "\e[1G", https://en.wikipedia.org/wiki/ANSI_escape_code#Description
             println("  * Field point: ", fpindx, "/", size(fieldpoints, 2), "... ")
             t1 = time_ns()
         end
 
-        velocity = _weighted_biot_savart(fp,
-                                            vorpathpoints,
-                                            cordiameters,
-                                            circulations;
-                                            verbose=verbose)
+        velocity = weighted_biot_savart_for_one_field_point(fp,
+                                                            vorpathpoints,
+                                                            cordiameters,
+                                                            circulations;
+                                                            verbose=verbose)
 
         # TIMING
         if verbose
@@ -57,28 +71,5 @@ function weighted_biot_savart_solver_cpu(# returnarray,
         println("Leaving weighted_biot_savart_solver_cpu.")
     end
 
-    # return nothing
     return Array(returnarray)
 end
-
-# DELETE
-# ################### USER API ###################
-
-# function bs_solve_cpu(fieldpoints,
-#                         vorpathpoints,
-#                         cordiameters,
-#                         circulations;
-#                         verbose=false)
-#     # Create an array to store the return velocities
-#     ret_vels = Array{Float64}(undef, 3, size(fieldpoints, 2))
-
-#     _weighted_biot_savart_solver_cpu!(
-#         ret_vels,
-#         fieldpoints,
-#         vorpathpoints,
-#         cordiameters,
-#         circulations;
-#         verbose=verbose)
-
-#     return Array(ret_vels)
-# end

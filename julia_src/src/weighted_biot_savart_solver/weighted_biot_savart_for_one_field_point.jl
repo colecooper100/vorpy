@@ -1,17 +1,12 @@
+###### Import modules and local scrips ######
 using StaticArrays: SVector
 using LinearAlgebra: norm, cross
+include("integrators/integrator_settings.jl")
 
 
-###### Set BS integrator ######
-# println("Inside biot_savart_solver_vortex_line.jl... ", "PWD: ", pwd())  # DEBUG
-include("biot_savart_segment_integrator.jl")
-bs_integrator(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2) = bs_nonuniform_trapezoidal_rule_segment(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
-
-
-###### Utility functions ######
-# Function for getting a vortex path segment
-# which works on the GPU
-function _getseg(vpps, cdms, circs, indx)
+###### Function for extracting a path segment ######
+# This is mainly needed for the GPU
+function getseg(vpps, crads, circs, indx)
     # Get starting point of segment
     @inbounds vpp1 = SVector{3, Float32}(
         vpps[1, indx],
@@ -24,7 +19,7 @@ function _getseg(vpps, cdms, circs, indx)
         vpps[2, indx+1],
         vpps[3, indx+1])
 
-    @inbounds return vpp1, vpp2, cdms[indx], cdms[indx+1], circs[indx], circs[indx+1]
+    @inbounds return vpp1, vpp2, crads[indx], crads[indx+1], circs[indx], circs[indx+1]
 end
 
 
@@ -44,30 +39,31 @@ then passes the step size, field point, and segment
 to the integrator, and the integrator returns the
 velocity for that segment.
 ===================================================#
-function _weighted_biot_savart(fp, vpps, cdms, circs; verbose=false)
+function weighted_biot_savart_for_one_field_point(fp, vpps, crads, circs; verbose=false)
     # Compute the number of vortex path segments
     num_vsegs = UInt32(size(vpps, 2)) - UInt32(1)
 
     # Initialize the return velocity
     rtn_vel = SVector{3, Float32}(0, 0, 0)
 
-    # Step through each vortex path segment.
-    # We are using a while loop because the CUDA.jl
-    # docs says this is more efficient than using a
-    # for loop with a step interval.
-    # I WOULD LIKE TO KNOW IF THIS IS TRUE!
     # TIMING
     if verbose
-        include("/home/user1/Dropbox/code/vorpy/julia_src/src/timing.jl")
+        include("/home/user1/Dropbox/code/vorpy/julia_src/src/elapsed_time.jl")
         println("Inside _weighted_biot_savart...")
         println("* Looping over all vortex path segments...")
         # Initial time for entire execution
         t0 = time_ns()
     end
+
+    # Step through each vortex path segment.
+    # We are using a while loop because the CUDA.jl
+    # docs says this is more efficient than using a
+    # for loop with a step interval.
+    # I WOULD LIKE TO KNOW IF THIS IS TRUE!
     segindx = UInt32(1)
     while segindx <= num_vsegs
         # Get segment
-        seg = _getseg(vpps, cdms, circs, segindx)
+        seg = getseg(vpps, crads, circs, segindx)
 
         # Determine an appropriate step size for the
         # integrator.
@@ -83,20 +79,27 @@ function _weighted_biot_savart(fp, vpps, cdms, circs; verbose=false)
         ==========================================#
         # Rough estimate of core diameter for determining
         # step size
-        STEP_SIZE_SCALAR = Float32(5)
-        avg_cdm = sum(seg[3:4]) / Float32(2)
-        stepsize = STEP_SIZE_SCALAR * avg_cdm
+        avg_crad = sum(seg[3:4]) / Float32(2)
+        STEP_SIZE_SCALAR = Float32(0.5)
+        stepsize = STEP_SIZE_SCALAR * avg_crad
+
         # TIMING
         if verbose
             print("  * Segment: ", segindx, "/", num_vsegs, ", ")
-            print("integrator step size:", stepsize,  "... ")
+            println("integrator step size:", stepsize,  "... ")
             t1 = time_ns()
         end
+
+        # Compute the velocity for the segment
         segvel = bs_integrator(stepsize, fp, seg...)
+
         # TIMING
         if verbose
-            println("Done ", elapsed_time(t1), " seconds.")
+            println("  * Done ", elapsed_time(t1), " seconds.")
         end
+        
+        # Add the segment velocity to the accumulated
+        # velocity
         rtn_vel = rtn_vel .+ segvel
         segindx += UInt32(1)  # Advance the loop counter
     end

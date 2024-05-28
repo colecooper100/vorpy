@@ -1,56 +1,41 @@
-using StaticArrays: SVector
-using LinearAlgebra: norm, cross
+#============================================
+This script is used to specify what methods
+and models to use when solving the Biot-Savart
+law. 
+============================================#
+
+###### Set the model of the vortex ######
+# This is called by the integrand function
+include(string(pwd(), "/julia_src/src/vortex_models/piecewise_linear_vortex_segment_model.jl"))
+function vortex_model(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
+    return piecewise_linear_vortex_segment_model(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
+end
 
 
-# println("Inside biot_savart_segment_integrator.jl...")  # DEBUG
-
-
-###### Set the models for vortex segment ######
-include("vortex_segment_models.jl")
-vortex_segment_model(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2) = piecewise_linear_vortex(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
-
-
-###### Set the models for the BS weight function ######
+###### Set the weight function ######
+# This is called by the integrand function
 include("bernstein_polynomial_weight.jl")
 # Set weight function
-weight_function(delta) = bernstein_polynomial_weight(delta)
-
-
-###### Define BS integrand function ######
-# The integrand always expects ell \in [0, seglen]
-function bs_integrand_segment(ell, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
-    vpp, vtan, vcr, cir, rtnell, endofseg = vortex_segment_model(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
-    # println("vtan = ", vtan)  # DEBUG
-    xi = fp .- vpp
-    if norm(xi) == 0
-        return SVector{3, Float32}(0, 0, 0), rtnell, endofseg
-    else
-        ximag = norm(xi)
-        dir = cross(vtan, xi)
-        # println("dir = ", dir)  # DEBUG
-        weight = weight_function(ximag / vcr)
-        return (weight * cir / ximag^3) .* dir, rtnell, endofseg
-    end
+function weight_function(delta)
+    return bernstein_polynomial_weight(delta)
 end
 
-# Integrate along a given path segment
-# F(x) = \int_a^b f(x) dx \approx \sum_{i=1}^{N} (f(x_{i-1}) + f(x_i))/2 * \Delta x_i
-# where \Delta x_i = x_i - x_{i-1}
-function bs_nonuniform_trapezoidal_rule_segment(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
-    # Initialize variables used in the loop
-    # totell = Float32(0)
-    sol = SVector{3, Float32}(0, 0, 0)
-    eval_bs_integrand, ell, endofseg = bs_integrand_segment(Float32(0), fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
-    while !endofseg
-        prev_ell = ell
-        prev_eval_bs_integrand = eval_bs_integrand
-        eval_bs_integrand, ell, endofseg = bs_integrand_segment(prev_ell + stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
-        # totell += rtnell - ell
-        sol = sol .+ (prev_eval_bs_integrand .+ eval_bs_integrand) * (ell - prev_ell) / 2
-    end
-    return sol / (4 * Float32(pi))
-end
 
+###### BS integrand function ######
+# This is called by the integrator
+include("integrand.jl")
+
+
+###### Set numerical integration method ######
+# include("nonuniform_trapezoidal_rule.jl")
+# function bs_integrator(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
+#     return nonuniform_trapezoidal_rule_segment(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
+# end
+
+include("bimodal_integrator_polygonal_segments.jl")
+function bs_integrator(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
+    return bimodal_integrator_segment(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2, verbose=false)
+end
 
 
 # ################### DEBUGGING ###################

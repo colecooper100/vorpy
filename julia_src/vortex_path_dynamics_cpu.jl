@@ -64,7 +64,7 @@ println("Local error tolerance: ", LOCAL_ERR_TOL)
 
 # Generate the vortex points
 theta = range(0, 2 * pi, length=NUMSEGS+1)
-cylin_radius = RINGRADIUS .* (1 .+ 3f-1 .* cos.(3 .* theta))
+cylin_radius = RINGRADIUS .* (1 .+ 3f-1 .* cos.(3 .* theta))  # three fold loop
 vpx = cylin_radius .* cos.(theta) .+ RINGCENTER[1]
 vpy = cylin_radius .* sin.(theta) .+ RINGCENTER[2]
 vpz = zeros(size(vpx)...) .+ RINGCENTER[3]
