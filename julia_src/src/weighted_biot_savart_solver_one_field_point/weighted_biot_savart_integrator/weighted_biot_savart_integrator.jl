@@ -1,40 +1,34 @@
-#============================================
-This script is used to specify what methods
-and models to use when solving the Biot-Savart
-law. 
-============================================#
+###### Set the environment variables ######
+# environment_variables.jl sets the path varibles
+# used to call other scripts
+# pwd() returns the "present working directory". For
+# this project, pwd() should return the path to the
+# vorpy directory
+include(string(pwd(), "/julia_src/environment_variables.jl"))
+
 
 ###### Set the model of the vortex ######
-# This is called by the integrand function
-include(string(pwd(), "/julia_src/src/vortex_models/piecewise_linear_vortex_segment_model.jl"))
+include(string(VORTEX_MODELS, "/piecewise_linear_vortex_segment_model.jl"))
 function vortex_model(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
     return piecewise_linear_vortex_segment_model(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
 end
 
 
-###### Set the weight function ######
-# This is called by the integrand function
-include("bernstein_polynomial_weight.jl")
-# Set weight function
-function weight_function(delta)
-    return bernstein_polynomial_weight(delta)
-end
-
-
 ###### BS integrand function ######
-# This is called by the integrator
-include("integrand.jl")
+include(string(WEIGHTED_BIOT_SAVART_INTEGRAND, "/weighed_biot_savart_integrand.jl"))
 
 
 ###### Set numerical integration method ######
-# include("nonuniform_trapezoidal_rule.jl")
-# function bs_integrator(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
-#     return nonuniform_trapezoidal_rule_segment(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
+# # Trapezoidal rule
+# include(string(WEIGHTED_BIOT_SAVART_INTEGRATOR_METHODS, "/nonuniform_trapezoidal_rule/biot_savart_nonuniform_trapezoidal_rule.jl"))
+# function wbs_integrator(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
+#     return biot_savart_nonuniform_trapezoidal_rule(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
 # end
 
-include("bimodal_integrator_polygonal_segments.jl")
-function bs_integrator(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
-    return bimodal_integrator_segment(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2, verbose=false)
+# Bimodal integrator
+include(string(WEIGHTED_BIOT_SAVART_INTEGRATOR_METHODS, "/bimodal_integrator_polygonal_segments/bimodal_biot_savart_integrator_polygonal_segments.jl"))
+function wbs_integrator(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
+    return bimodal_biot_savart_integrator_polygonal_segments(stepsize, fp, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
 end
 
 

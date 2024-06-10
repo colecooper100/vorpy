@@ -1,20 +1,30 @@
 ###### Import modules and local scrips ######
 using StaticArrays: SVector
 using LinearAlgebra: norm, cross
-include("integrators/integrator_settings.jl")
+
+# environment_variables.jl sets the path varibles
+# used to call other scripts
+# pwd() returns the "present working directory". For
+# this project, pwd() should return the path to the
+# vorpy directory
+include(string(pwd(), "/julia_src/environment_variables.jl"))
+include(string(WEIGHTED_BIOT_SAVART_INTEGRATOR, "/weighted_biot_savart_integrator.jl"))
 
 
 ###### Function for extracting a path segment ######
 # This is mainly needed for the GPU
-function getseg(vpps, crads, circs, indx)
+function _getseg(vpps::AbstractArray{T, 2},
+                    crads::AbstractArray{T, 1},
+                    circs::AbstractArray{T, 1},
+                    indx::Integer)::Tuple{SVector{3, T}, SVector{3, T}, T, T, T, T} where {T<:AbstractFloat}
     # Get starting point of segment
-    @inbounds vpp1 = SVector{3, Float32}(
+    @inbounds vpp1 = SVector{3, T}(
         vpps[1, indx],
         vpps[2, indx],
         vpps[3, indx])
 
     # Get the ending point of segment
-    @inbounds vpp2 = SVector{3, Float32}(
+    @inbounds vpp2 = SVector{3, T}(
         vpps[1, indx+1],
         vpps[2, indx+1],
         vpps[3, indx+1])
@@ -39,21 +49,15 @@ then passes the step size, field point, and segment
 to the integrator, and the integrator returns the
 velocity for that segment.
 ===================================================#
-function weighted_biot_savart_for_one_field_point(fp, vpps, crads, circs; verbose=false)
+function weighted_biot_savart_for_one_field_point(fp::SVector{3, T},
+                                                    vpps::AbstractArray{T, 2},
+                                                    crads::AbstractArray{T, 1},
+                                                    circs::AbstractArray{T, 1}) where {T<:AbstractFloat}
     # Compute the number of vortex path segments
     num_vsegs = UInt32(size(vpps, 2)) - UInt32(1)
 
     # Initialize the return velocity
     rtn_vel = SVector{3, Float32}(0, 0, 0)
-
-    # TIMING
-    if verbose
-        include("/home/user1/Dropbox/code/vorpy/julia_src/src/elapsed_time.jl")
-        println("Inside _weighted_biot_savart...")
-        println("* Looping over all vortex path segments...")
-        # Initial time for entire execution
-        t0 = time_ns()
-    end
 
     # Step through each vortex path segment.
     # We are using a while loop because the CUDA.jl
@@ -63,7 +67,7 @@ function weighted_biot_savart_for_one_field_point(fp, vpps, crads, circs; verbos
     segindx = UInt32(1)
     while segindx <= num_vsegs
         # Get segment
-        seg = getseg(vpps, crads, circs, segindx)
+        seg = _getseg(vpps, crads, circs, segindx)
 
         # Determine an appropriate step size for the
         # integrator.
@@ -83,31 +87,13 @@ function weighted_biot_savart_for_one_field_point(fp, vpps, crads, circs; verbos
         STEP_SIZE_SCALAR = Float32(0.5)
         stepsize = STEP_SIZE_SCALAR * avg_crad
 
-        # TIMING
-        if verbose
-            print("  * Segment: ", segindx, "/", num_vsegs, ", ")
-            println("integrator step size:", stepsize,  "... ")
-            t1 = time_ns()
-        end
-
         # Compute the velocity for the segment
-        segvel = bs_integrator(stepsize, fp, seg...)
-
-        # TIMING
-        if verbose
-            println("  * Done ", elapsed_time(t1), " seconds.")
-        end
+        segvel = wbs_integrator(stepsize, fp, seg...)
         
         # Add the segment velocity to the accumulated
         # velocity
         rtn_vel = rtn_vel .+ segvel
         segindx += UInt32(1)  # Advance the loop counter
-    end
-
-    # TIMING
-    if verbose
-        println("* Total elapsed time: ", elapsed_time(t0), " seconds")
-        println("Leaving _weighted_biot_savart.")
     end
 
     return rtn_vel

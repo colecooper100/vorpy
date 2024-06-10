@@ -2,9 +2,6 @@ using StaticArrays: SVector
 using LinearAlgebra: norm
 
 
-# println("Inside vortex_segment_models.jl...")  # DEBUG
-
-
 #=============================================
 ---------------Segment Models----------------
 I wanted the vortex path model to be a function
@@ -84,12 +81,18 @@ Output:
     - endofseg: boolean, true if the end of the
         segment was reached
 =============================================#
-function piecewise_linear_vortex_segment_model(ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2, params=nothing)
+function piecewise_linear_vortex_segment_model(ell::T,
+                                                vpp1::SVector{3, T},
+                                                vpp2::SVector{3, T},
+                                                crad1::T,
+                                                crad2::T,
+                                                circ1::T,
+                                                circ2::T,
+                                                params=nothing) where {T<:AbstractFloat}
     # Compute length of segment (how this is done
     # will depend on the model)
     seg = vpp2 .- vpp1
     seglen = norm(seg)
-    # println("seg = ", seg)  # DEBUG
 
     # The tagent of the segment is constant so
     # we can compute it here
@@ -98,115 +101,23 @@ function piecewise_linear_vortex_segment_model(ell, vpp1, vpp2, vcr1, vcr2, cir1
     if ell >= seglen
         # Specified arc length $\ell$ is
         # greater than the segment length
-        vpp = vpp2
-        vcr = vcr2
-        cir = cir2
-        rtnell = seglen
+        vpp_rtn = vpp2
+        crad_rtn = crad2
+        circ_rtn = circ2
+        ell_rtn = seglen
         endofseg = true
     else
         # Using the model, compute the path
         # point
-        vpp = vpp1 .+ (ell .* vtan)
+        vpp_rtn = vpp1 .+ (ell .* vtan)
         # Using the model, compute the core
         # diameter
-        vcr = vcr1 + (ell / seglen) * (vcr2 - vcr1)
+        crad_rtn = crad1 + (ell / seglen) * (crad2 - crad1)
         # Using the model, compute the circulation
-        cir = cir1 + (ell / seglen) * (cir2 - cir1)
-        rtnell = ell
+        circ_rtn = circ1 + (ell / seglen) * (circ2 - circ1)
+        ell_rtn = ell
         endofseg = false
     end
-    return vpp, vtan, vcr, cir, rtnell, endofseg
+
+    return vpp_rtn, vtan, crad_rtn, circ_rtn, ell_rtn, endofseg
 end
-
-
-
-
-# ################### DEBUGGING ###################
-# using CUDA
-
-# #==============================================
-# -----------Straight Vortex Test Case-----------
-# We define a Lamb-Oseen vortex aligned with the
-# z-axis.
-
-# If our coordinate system has +z running from
-# left-to-right, then +x is into the page and +y
-# runs from down-to-up. We compute the flow
-# velocity at points along the +x-axis at the
-# origin, i.e., $\vec r = (x, 0, 0)$.
-# ==============================================#
-# # Set problem parameters
-# VDOMAIN = [-1000, 1000]  # Vortex path domain
-# FPDOMAIN = [0, 20]  # Field points domain
-# NUMVPSEGS = 3  # Number of vortex path segments
-# NUMFP = 5  # Number of field points
-# println("VDOMAIN = ", VDOMAIN)
-# println("FPDOMAIN = ", FPDOMAIN)
-# println("NUMVPSEGS = ", NUMVPSEGS)
-# println("NUMFP = ", NUMFP)
-
-# # Define the vortex
-# vpps = zeros(Float32, 3, NUMVPSEGS + 1)  # Path points
-# vpps[1, :] .= range(VDOMAIN[1], stop=VDOMAIN[2], length=NUMVPSEGS + 1)
-# vcrs = Float32.(collect(axes(vpps, 2)))  # Core diameters
-# cirs = Float32.(collect(axes(vpps, 2)))  # Circulation
-
-# # Define the field points
-# x = zeros(Float32, NUMFP)
-# x .= range(FPDOMAIN[1], FPDOMAIN[2], length=NUMFP)  # end point is included in range
-# if x[1] == 0 
-#     x[1] = 1e-3  # avoid divide by zero
-# end
-# fps = zeros(Float32, 3, NUMFP)
-# fps[1, :] .= x
-
-
-# ###### Run on the CPU ######
-# ELL = Float32(1900)
-# rtncpu = piecewise_linear_vortex(
-#     ELL,
-#     vpps[:, 1],
-#     vpps[:, 2],
-#     vcrs[1],
-#     vcrs[2],
-#     cirs[1],
-#     cirs[2])
-# println("CPU: ", rtncpu)
-
-# ###### Run on the GPU ######
-# # Make a wrapper to run functions on the GPU
-# function gpu_wrapper(rtn, ell, vpp1, vpp2, vcr1, vcr2, cir1, cir2)
-#     svpp1 = SVector{3, Float32}(vpp1[1], vpp1[2], vpp1[3])
-#     svpp2 = SVector{3, Float32}(vpp2[1], vpp2[2], vpp2[3])
-#     vpp, segtan, vcr, cir, rtnell, endofseg = piecewise_linear_vortex(ell, svpp1, svpp2, vcr1, vcr2, cir1, cir2)
-#     rtn[:, 1] .= vpp
-#     rtn[:, 2] .= segtan
-#     rtn[1, 3] = vcr
-#     rtn[2, 3] = cir
-#     rtn[3, 3] = rtnell
-#     return nothing
-# end
-
-# cuvpps = CuArray(vpps)
-# cuvpp1 = cuvpps[:, 1]
-# cuvpp2 = cuvpps[:, 2]
-# cuvcrs = CuArray(vcrs)
-# cuvcr1 = vcrs[1]
-# cuvcr2 = vcrs[2]
-# cucirs = CuArray(cirs)
-# cucir1 = cirs[1]
-# cucir2 = cirs[2]
-# cufps = CuArray(fps)
-# curtn = CuArray{Float32}(undef, 3, 3)
-
-# # @device_code_warntype
-# # @device_code_llvm
-# kern = @cuda launch=false gpu_wrapper(curtn, ELL, cuvpp1, cuvpp2, cuvcr1, cuvcr2, cucir1, cucir2)
-# # @cuda gpu_wrapper(curtn, ELL, cuvpp1, cuvpp2, cuvcr1, cuvcr2, cucir1, cucir2)
-
-# println("Max threads: ", CUDA.maxthreads(kern))
-# println("Register usage: ", CUDA.registers(kern))
-# println("Memory usage: ", CUDA.memory(kern))
-
-# # println("curtn = ")  # DEBUG
-# # display(curtn)  # DEBUG

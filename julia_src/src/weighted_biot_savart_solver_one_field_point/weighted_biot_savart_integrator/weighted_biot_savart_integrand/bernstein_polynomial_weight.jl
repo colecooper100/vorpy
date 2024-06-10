@@ -1,12 +1,12 @@
 # Define the weight function such that
 # x \in [0, 1]
-function bernstein_polynomial_weight(delta)
+function bernstein_polynomial_weight(delta::T) where {T<:AbstractFloat}
     # De Casteljau's algorithm, unrolled, computed for
     # the weight function delta \in [0, 1] where delta
     # is the magnitude of the spherical radius divided
     # by the core radius.
     # So, if delta > 5, then radius > 5 * core radius
-    if delta < 0
+    if delta < 0  # delta negative
         throw(string("Input for the weight function was $(delta). Input should be between 0 and 1."))
         return Float32(0)
     elseif delta > 5  

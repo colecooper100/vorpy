@@ -1,32 +1,40 @@
 ###### Import modules and local scrips ######
 using Plots
-include(string(pwd(), "/julia_src/src/utility_functions/utility_functions.jl"))
 
+# environment_variables.jl sets the path varibles
+# used to call other scripts
+# pwd() returns the "present working directory". For
+# this project, pwd() should return the path to the
+# vorpy directory
+include(string(pwd(), "/julia_src/environment_variables.jl"))
+include(string(UTILITY_FUNCTIONS, "/utility_functions.jl"))
 
-
-###### Biot-Savart solver function ######
+# Biot-Savart solver
 print("Importing Biot-Savart solver... ")
 t0 = time_ns()  # TIMING
-include(string(pwd(), "/julia_src/weighted_biot_savart_solver_cpu.jl"))
-
-# Set the solver function
-function bsfn(fps, vpps, cdms, circs; kwargs...)
-    # Change this to change the solver
-    return weighted_biot_savart_solver_cpu(fps, vpps, cdms, circs; kwargs...)
-end
-
+# MAKE SURE TO CHANGE THE SOLVER FOR bsfn() BELOW!!!!!
+# include(string(VORPY, "/julia_src/weighted_biot_savart_solver_cpu.jl"))
+include(string(VORPY, "/julia_src/weighted_biot_savart_solver_cuda.jl"))
 println("Done ", elapsed_time(t0), " seconds.")  # TIMING
 println()  # Blank line
 
 
+###### Set the solver function ######
+function bsfn(fps, vpps, crads, circs)
+    # Change this to change the solver
+    # DON'T FORGET TO INPUT THE CORRECT SCRIPT!!!!
+    # return weighted_biot_savart_solver_cpu(fps, vpps, crads, circs)
+    return weighted_biot_savart_solver_cuda(fps, vpps, crads, circs)
+end
 
-###### Parameters: test and vortex ######
+
+###### Test and vortex parameters ######
 ENDPOINTS = [-100000, 100000]
 NUMSEGS = 100  # was 2
-CORERADIUS = 5  # was 0.0001
-CIRCULATION = 10.0
-ZPLANE = 0.0
-CONSTANTRADIUS = CORERADIUS * 6  # CORERADIUS / 4
+CORERADIUS = Float32(5)  # was 0.0001
+CIRCULATION = Float32(10.0)
+ZPLANE = Float32(0.0)
+CONSTANTRADIUS = CORERADIUS * Float32(6)  # CORERADIUS / 4
 NUMVELSAMP = 100
 VELSAMPRANGE = [0.1, 40] # was [40, 100]
 println("Making Lamb-Oseen Vortex...")
@@ -38,7 +46,6 @@ println("* Z-plane: ", ZPLANE)
 println("* Constant radius: ", CONSTANTRADIUS)
 println("* Number of velocity samples: ", NUMVELSAMP)
 println()  # Blank line
-
 
 
 ###### Analytical solution for Lamb-Oseen vortex ######
@@ -77,29 +84,27 @@ function analytical_solution_lamb_oseen(fp, coreradius, circulations)
 end
 
 
-
 ###### Make the vortex ######
 # Make the vortex path
 # Align the vortex with the z-axis
-vpps = zeros(3, NUMSEGS + 1)
+vpps = zeros(Float32, 3, NUMSEGS + 1)
 vpps[3, :] .= range(ENDPOINTS[1], stop=ENDPOINTS[2], length=NUMSEGS + 1)
 
 # Define the core radii
 # Eventually I would like to allow the core radius
 # to vary along the path, but for now, we will just
 # use a constant radius.
-cor_rads = ones(NUMSEGS + 1) .* CORERADIUS
+crads = ones(Float32, NUMSEGS + 1) .* CORERADIUS
 
 # Define the circulations
 # Eventually I would like to allow the circulations
 # to vary along the path, but for now, we will just
 # use a constant circulation.
-circs = ones(NUMSEGS + 1) .* CIRCULATION
+circs = ones(Float32, NUMSEGS + 1) .* CIRCULATION
 
 # println("Vortex Path: ", vpps)  # DEBUG
 # println("Core Radii: ", cor_rads)  # DEBUG
 # println("Circulations: ", circs)  # DEBUG
-
 
 
 ###### Evaluate solutions at a constant distance ######
@@ -123,7 +128,7 @@ for i in axes(fps, 2)
     # (I believe) the analytical solution works only for
     # constant core size and and circulation. So, we give
     # the first core size and circulation.
-    vel_fat_core, vel_thin_core = analytical_solution_lamb_oseen(fps[:, i], cor_rads[1], circs[1])
+    vel_fat_core, vel_thin_core = analytical_solution_lamb_oseen(fps[:, i], crads[1], circs[1])
     ana_vels_fat_core[:, i] .= vel_fat_core
     ana_vels_thin_core[:, i] .= vel_thin_core
 end
@@ -132,7 +137,7 @@ println("Done ", elapsed_time(t0), " seconds.")  # TIMING
 # Compute the numerical solution
 println("* Computing numerical solution... ")
 t0 = time_ns()  # TIMING
-num_vels = bsfn(fps, vpps, cor_rads, circs; verbose=false)
+num_vels = bsfn(fps, vpps, crads, circs)
 println("* Numerical solution done ", elapsed_time(t0), " seconds.")  # TIMING
 
 # 2D quiver plot of the velocity
@@ -180,9 +185,9 @@ println()  # Blank line
 println("Comparing numerical solution to analytical...")
 
 # Make the field points
-fpxvec = range(VELSAMPRANGE..., length=NUMVELSAMP)
-fpyvec = range(VELSAMPRANGE..., length=NUMVELSAMP)
-fpzvec = ones(length(fpxvec)) .* ZPLANE
+fpxvec = collect(Float32, range(VELSAMPRANGE..., length=NUMVELSAMP))
+fpyvec = collect(Float32, range(VELSAMPRANGE..., length=NUMVELSAMP))
+fpzvec = ones(Float32, length(fpxvec)) .* ZPLANE
 fps = stack([fpxvec, fpyvec, fpzvec], dims=1)
 # println("Size of fps: ", size(fps))  # DEBUG
 
@@ -192,7 +197,7 @@ t0 = time_ns()  # TIMING
 ana_vels_fat_core = zeros(size(fps)...)
 ana_vel_thin_core = zeros(size(fps)...)
 for i in axes(fps, 2)
-    vel_fat_core, vel_thin_core = analytical_solution_lamb_oseen(fps[:, i], cor_rads[1], circs[1])
+    vel_fat_core, vel_thin_core = analytical_solution_lamb_oseen(fps[:, i], crads[1], circs[1])
     ana_vels_fat_core[:, i] .= vel_fat_core
     ana_vel_thin_core[:, i] .= vel_thin_core
 end
@@ -201,7 +206,7 @@ println("Done ", elapsed_time(t0), " seconds.")  # TIMING
 # Compute numerical solution
 println("* Computing numerical solution... ")
 t0 = time_ns()  # TIMING
-num_vels = bsfn(fps, vpps, cor_rads, circs; verbose=false)
+num_vels = bsfn(fps, vpps, crads, circs)
 println("* Numerical solution done ", elapsed_time(t0), " seconds.")  # TIMING
 
 # Compute and plot the error
