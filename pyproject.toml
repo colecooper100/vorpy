@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling",
+  "juliacall~=0.9.20",
+  "numpy~=1.26.4",
+  "scipy~=1.13.0",
+  "matplotlib~=3.8.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vorpy"
+dynamic = ["version"]
+description = 'Vortical flow modeling'
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "kbcollins", email = "kbcollins@users.noreply.github.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = []
+
+[project.urls]
+Documentation = "https://github.com/kbcollins/vorpy#readme"
+Issues = "https://github.com/kbcollins/vorpy/issues"
+Source = "https://github.com/kbcollins/vorpy"
+
+[tool.hatch.version]
+path = "src/vorpy/__about__.py"
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/vorpy tests}"
+
+[tool.coverage.run]
+source_pkgs = ["vorpy", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/vorpy/__about__.py",
+]
+
+[tool.coverage.paths]
+vorpy = ["src/vorpy", "*/vorpy/src/vorpy"]
+tests = ["tests", "*/vorpy/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
