@@ -30,38 +30,20 @@ jl = juliacall.newmodule('vorpy')
 print('* Getting path to julia_fns...')
 _julia_fns_path = os.path.realpath("julia_fns", strict=True)
 print('* Path to julia_fns:', _julia_fns_path)
-
-
-###### Get julia_fns path ######
 # Make the global variable `JULIA_FNS`, in Julia,
 # to store the absolute path to `julia_fns`.
 print('* Setting JULIA_FNS variable in Julia...')
 jl.seval(f'JULIA_FNS = "{_julia_fns_path}"')
 
 
-###### Set up our Julia environment variables ######
-# The file 'julia_env.jl' sets several
-# global variables which are used by the
-# vorpy functions written in Julia.
+###### Run julia_env.jl ######
+# The file 'julia_env.jl' activates the vorpy
+# Julia project (i.e., the project which contains
+# the dependencies for the vorpy functions). It
+# also sets up some global variables (in Julia)
+# which are used by the vorpy functions.
 print(f'* Trying to run julia_env.jl in {jl.JULIA_FNS}...')
 jl.seval('include(string(JULIA_FNS, "/julia_env.jl"))')
-
-
-###### Activate the vorpy Julia project ######
-# Julia projects are where project dependencies
-# are tracked. The files related to this are 
-# project.toml and manifest.toml. I have placed
-# these in `julia_fns`.
-# Activating the project also serves as a check
-# to make sure the `JULIA_FNS` variable is set
-# correctly.
-print('* Activating vorpy Julia project...')
-jl.seval('using Pkg')
-jl.Pkg.activate(jl.JULIA_FNS)
-# # We can make sure we have the correct project activated
-# # by checking the status of the project (i.e. print a list
-# # of installed packages and their versions).
-# jl.Pkg.status()
 
 
 ###### Set up user API to Biot-Savart solvers ######
@@ -93,8 +75,8 @@ try:
     print('* CUDA Biot-Savart solver loaded.')
 
 except Exception as e:
-    print('!! CUDA version of Biot-Savart solver not available; revert to CPU version.')
-    print(f'!! Error: {e}')
+    print('! CUDA version of Biot-Savart solver not available; revert to CPU version.')
+    print(f'! Error: {e}')
 
 finally:
     print('* Loading CPU Biot-Savart solver...')
@@ -178,6 +160,6 @@ finally:
         except KeyError:
             raise ValueError(f'Invalid device: \'{device}\'. Available devices: {list(_WBS_SOLVER_DEVICES.keys())}')
 
-    print(f'!! User API to Biot-Savart solvers set up. Available devices: {list(_WBS_SOLVER_DEVICES.keys())}')
+    print(f'! User API to Biot-Savart solvers set up. Available devices: {list(_WBS_SOLVER_DEVICES.keys())}')
 
 

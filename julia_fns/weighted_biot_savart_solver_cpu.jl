@@ -20,7 +20,15 @@ CPU code only.
 
 
 ###### Turn on debugging ######
-DEBUG = true
+#====================================
+You can't have debugging code that
+includes print/println statements in
+the GPU code. So, I have placed it
+here. Additionally, this is not a
+standard feature which is why it is
+a variable set in the source code.
+====================================#
+DEBUG = false
 
 
 ###### Import modules and local scrips ######

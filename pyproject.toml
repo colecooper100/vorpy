@@ -1,15 +1,11 @@
 [build-system]
-requires = ["hatchling",
-  "juliacall~=0.9.20",
-  "numpy~=1.26.4",
-  "scipy~=1.13.0",
-  "matplotlib~=3.8.4"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
 name = "vorpy"
 dynamic = ["version"]
-description = 'Vortical flow modeling'
+description = ''
 readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
@@ -28,7 +24,10 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = []
+dependencies = [
+  "juliacall~=0.9.20",
+  "numpy~=1.26.4"
+]
 
 [project.urls]
 Documentation = "https://github.com/kbcollins/vorpy#readme"

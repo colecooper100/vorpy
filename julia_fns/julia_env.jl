@@ -5,25 +5,20 @@ was located, I had to change the path in several
 files. By using environment variables, I can change
 the path in one place and it will be updated in all
 the scripts that use it.
-===================================================#
-# pwd() returns the "present working directory". For
-# this project, pwd() should return the path to the
-# vorpy directory.
-# VORPY = pwd()
-# JULIA_FNS = string(VORPY, "/julia_fns")
-#================================================
+
 IMPORTANT: When using JuliaCall, Julia's working
 directory (which can be checked with `pwd()` and
 changed with `cd(<path>)`) is determined by the
 directory that the Python code is running outof.
-To make these paths work, I could hardcode the full
-path to the `julia_fns` directory, but I want
-code to be portable. So, when a Julia function
-is called from Python, I will first set
-`JULIA_FNS` (in Julia --through Python) to the
-the path for `julia_fns`. The rest should
-work as expected.
-================================================#
+To make the paths paths in this script work,
+you need to set the global variable JULIA_FNS to 
+the path of the julia_fns directory. This can be
+done in the Python script that calls the Julia code.
+====================================================#
+using Pkg: activate, instantiate
+activate(JULIA_FNS)  # Activate the Julia project environment
+instantiate()  # Install and precompile the project packages (if needed)
+
 UTILITY_FUNCTIONS = string(JULIA_FNS, "/src/utility_functions")
 VORTEX_DYNAMICS = string(JULIA_FNS, "/src/vortex_dynamics")
 VORTEX_MODELS = string(JULIA_FNS, "/src/vortex_models")
