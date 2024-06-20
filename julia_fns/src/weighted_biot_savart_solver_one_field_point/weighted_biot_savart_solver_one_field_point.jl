@@ -105,10 +105,19 @@ function weighted_biot_savart_for_one_field_point(fp::SVector{3, T},
         # avg_crad = sum(seg[3:4]) / Float32(2)
         # STEP_SIZE_SCALAR = Float32(0.5)
         # stepsize = STEP_SIZE_SCALAR * avg_crad
-        #
+        
         # Get the minimum core diameter
         mincrad = min(seg[3], seg[4])
         stepsize = stepsizescalar * mincrad
+        # eps(<type>) returns the smallest positive
+        # number that can be represented by the type.
+        # (i.e. the machine epsilon or machine precision)
+        # `stepsize` should always be positive, so we
+        # assume this.
+        if stepsize < (5 * eps(T))
+            # `stepsizescalar` is $(stepsizescalar) and the minimum core radius is $(mincrad), this results in a step size of $(stepsize) which is smaller than the minimum allowable step size of $(5 * eps(T)) (note: this minimum is type specific)."
+            throw(ArgumentError("The variable 'stepsizescalar' and/or the minimum core radius for some segment results in a integrator step size that is too small or negative."))
+        end
 
         # Compute the velocity for the segment
         segvel = wbs_integrator(stepsize, fp, seg...)

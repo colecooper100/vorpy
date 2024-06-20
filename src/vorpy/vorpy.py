@@ -167,7 +167,7 @@ finally:
             raise ValueError(f'corradii has {np.shape(corradii)[0]} elements and circulations has {np.shape(circulations)[0]}, both must have the same number of elements as vorpathpoints, i.e., {np.shape(vorpathpoints)[0]}.')
         
         try:
-            print('In wbs_solve', f'using device: {device}')  # DEBUG
+            # print('In wbs_solve', f'using device: {device}')  # DEBUG
             # Convert the user input to numpy arrays of
             # the specified data type.
             return _WBS_SOLVER_DEVICES[device](np.asanyarray(fieldpoints, dtype=datatype),
