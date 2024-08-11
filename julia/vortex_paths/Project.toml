@@ -1,0 +1,8 @@
+name = "vortex_paths"
+uuid = "6f5b6349-069a-4e1d-bc08-40437eb69665"
+authors = ["kbcollins <85638922+kbcollins@users.noreply.github.com>"]
+version = "0.1.0"
+
+[deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"

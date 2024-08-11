@@ -1,0 +1,9 @@
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+utilities = "112e32b9-080e-4c33-b486-a98261538424"
+vortex_paths = "6f5b6349-069a-4e1d-bc08-40437eb69665"
+weighted_biot_savart_cpu = "695546a4-e393-4544-b7de-0d806cd88aec"
+weighted_biot_savart_cuda = "064d0cad-d287-4bac-b32b-39f0024aa8af"
+weighted_biot_savart_solver = "074c469c-5ab1-483c-8632-3e124aab6ada"
