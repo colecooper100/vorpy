@@ -1,9 +1,0 @@
-name = "weighted_biot_savart_solver"
-uuid = "074c469c-5ab1-483c-8632-3e124aab6ada"
-authors = ["kbcollins <85638922+kbcollins@users.noreply.github.com>"]
-version = "0.1.0"
-
-[deps]
-LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
-utilities = "112e32b9-080e-4c33-b486-a98261538424"

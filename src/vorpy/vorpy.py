@@ -1,165 +1,105 @@
-###### Import modules ######
-import os
-import numpy as np
+# import time
 import juliacall
+import numpy as np
+
+# Set up Julia
+jl = juliacall.newmodule("vorpy")
+jl.seval("using Pkg")
+jl.Pkg.activate("../../julia")
+jl.seval("using weighted_biot_savart_integrator")
+jl.seval("using vortex_paths")
+# jl.Pkg.status()
+
+###################### OUTPUT FROM JULIACALL ######################
+# UserWarning: Julia was started with multiple threads
+# but multithreading support is experimental in JuliaCall.
+# It is recommended to restart Python with the environment
+# variable PYTHON_JULIACALL_HANDLE_SIGNALS=yes set,
+# otherwise you may experience segfaults or other crashes.
+# Note however that this interferes with Python's own signal
+# handling, so for example Ctrl-C will not raise KeyboardInterrupt.
+# See https://juliapy.github.io/PythonCall.jl/stable/faq/#Is-PythonCall/JuliaCall-thread-safe?
+# for further information. You can suppress this warning
+# by setting PYTHON_JULIACALL_HANDLE_SIGNALS=no.
+###################### OUTPUT FROM JULIACALL ######################
 
 
-###### Make new namespace for Julia ######
-# In the JuliaCall documents, it is recommended
-# to create a new namespace for Julia to avoid
-# conflicts with other modules.
-# Additionally, when code needs to be evaluated
-# in our Julia namespace, we can use the `seval`
-# method of the JuliaCall module.
-# See https://juliapy.github.io/PythonCall.jl/stable/juliacall/
-# for more information.
-print('* Creating new Julia namespace...')
-jl = juliacall.newmodule('vorpy')
+
+def wbs_cpu(vrtx, fps, stepscalar, minstepsize, thread):
+    """
+    wbs_cpu: Weighted Biot-Savart integrator
+
+    # Arguments
+    vrtx: vorpath object
+    fps: Nx3 array
+    stepscalar: float
+    minstepsize: float
+    threaded: bool
+
+    # Returns
+    rtnvals: NxM array, where M is what ever the Julia wbs_cpu
+    function returns
+    """
+
+    # t0 = time.time_ns()  # TIMING
+    rtnvals = jl.wbs_cpu(fps.T,
+                         vrtx.vpps.T,
+                         vrtx.crads,
+                         vrtx.circs,
+                         stepsizescalar=stepscalar,
+                         minstepsize=minstepsize,
+                         threaded=thread)
+
+    # t1 = time.time_ns()  # TIMING
+
+    return rtnvals.to_numpy().T
 
 
-###### Get julia_fns path ######
-# The os.path module has a method named `realpath`
-# which returns the absolute path of a file or
-# directory. We can use this to get the absolute
-# path of the `julia_fns` directory.
-# See https://docs.python.org/3/library/os.path.html#os.path.realpath
-# and https://www.geeksforgeeks.org/python-os-path-realpath-method/#
-# The `strict` keyword argument is set to `True`
-# so if file or directory does not exist, or is
-# not found an exception is raised.
-print('* Getting path to julia_fns...')
-_julia_fns_path = os.path.realpath("julia_fns", strict=True)
-print('* Path to julia_fns:', _julia_fns_path)
-# Make the global variable `JULIA_FNS`, in Julia,
-# to store the absolute path to `julia_fns`.
-print('* Setting JULIA_FNS variable in Julia...')
-jl.seval(f'JULIA_FNS = "{_julia_fns_path}"')
+class vorpath:
 
-
-###### Run julia_env.jl ######
-# The file 'julia_env.jl' activates the vorpy
-# Julia project (i.e., the project which contains
-# the dependencies for the vorpy functions). It
-# also sets up some global variables (in Julia)
-# which are used by the vorpy functions.
-print(f'* Trying to run julia_env.jl in {jl.JULIA_FNS}...')
-jl.seval('include(string(JULIA_FNS, "/julia_env.jl"))')
-
-
-###### Set up user API to Biot-Savart solvers ######
-# Initialize the _WBS_SOLVER_DEVICES dictionary.
-# We will determine what devices are available
-# to the user below.
-_WBS_SOLVER_DEVICES = {}
-
-# Try to load the CUDA Biot-Savart solver. If it works
-# add it to the _WBS_SOLVER_DEVICES dictionary.
-try:
-    print('* Loading CUDA Biot-Savart solver (this may take a few seconds)...')
-    
-    # Load CUDA Biot-Savart function
-    jl.include(jl.JULIA_FNS + '/weighted_biot_savart_solver_cuda.jl')
-
-    def _wbs_solver_cuda(fps, vpps, crads, circs, stepsize):
-        return np.transpose(jl.weighted_biot_savart_solver_cuda(np.transpose(fps),
-                                                                np.transpose(vpps),
-                                                                crads,
-                                                                circs,
-                                                                stepsizescalar=stepsize))
-    
-    # Add cuda Biot-Savart solver to the dictionary of
-    # available devices. This only happens if there is
-    # no error in the try block.
-    _WBS_SOLVER_DEVICES['cuda'] = _wbs_solver_cuda
-
-    print('* CUDA Biot-Savart solver loaded.')
-
-except Exception as e:
-    print('! CUDA version of Biot-Savart solver not available; revert to CPU version.')
-    print(f'! Error: {e}')
-
-finally:
-    print('* Loading CPU Biot-Savart solver...')
-
-    # Load CPU Biot-Savart function.
-    jl.include(jl.JULIA_FNS + '/weighted_biot_savart_solver_cpu.jl')
-
-    def _wbs_solver_cpu(fps, vpps, crads, circs, stepsize):
-        return np.transpose(jl.weighted_biot_savart_solver_cpu(np.transpose(fps),
-                                                                np.transpose(vpps),
-                                                                crads,
-                                                                circs,
-                                                                stepsizescalar=stepsize))
-    
-    # Add CPU Biot-Savart solver to the dictionary of
-    # available devices.
-    _WBS_SOLVER_DEVICES['cpu'] = _wbs_solver_cpu
-
-    print('* CPU Biot-Savart solver loaded.')
-
-
-    ######## User API ########
-    def wbs_solve(fieldpoints,
-                  vorpathpoints,
-                  corradii,
-                  circulations,
-                  *,  # Enforce keyword-only arguments
-                  device='cpu',
-                  datatype=np.float32,
-                  stepsizescalar=0.5):
+    def __init__(self, vpps, crads, circs):
         """
-        Solve the weighted Biot-Savart law for a vortical flow at a set of field points.
-
-        ## Parameters
-        - fieldpoints: Nx3 array of real values, where N is the number
-            of field points.
-        - vorpathpoints: Mx3 array of real values, where M is the number
-            of points defining the vortex path.
-        - corradii: 1D array of real values, where each value is the
-            radius of the vortex at the corresponding point in
-            `vorpathpoints`.
-        - circulations: 1D array of real values, where each value is
-            the circulation of the vortex at the corresponding point
-            in `vorpathpoints`.
-        - device (keyword): string, optional, default='cpu', the device used to
-            solve the Biot-Savart law.
-        - datatype (keyword): optional, default=np.float32, the
-            data type all passed elements are converted to before
-            being passed to the Biot-Savart solver. This should
-            be a floating-point type.
-        - stepsizescalar (keyword): real value, optional, default=0.5, a
-            scalar which determines the step sized used by the
-            Biot-Savart integrator. The step size is the product
-            of this scalar and the minimum user supplied core radius
-            of a segment.
-        
-
-
-        ## Future Features
-        - Add support for multiple vortices (i.e., return the velocity
-            at the given field points due to multiple vortices). This
-            should be the sum of the velocities due to each vortex.
+        vpps: Nx3 array
+        crads: N array
+        circs: N array
         """
-        # Check that vorpathpoints, corradii, circulations
-        # have the same number of elements. For example,
-        # if vorpathpoints has 10 elements (i.e., 10 three
-        # vectors), then corradii and circulations should
-        # also have 10 elements. 
-        if np.shape(corradii)[0] != np.shape(vorpathpoints)[0] or np.shape(circulations)[0] != np.shape(vorpathpoints)[0]:
-            raise ValueError(f'corradii has {np.shape(corradii)[0]} elements and circulations has {np.shape(circulations)[0]}, both must have the same number of elements as vorpathpoints, i.e., {np.shape(vorpathpoints)[0]}.')
-        
-        try:
-            # print('In wbs_solve', f'using device: {device}')  # DEBUG
-            # Convert the user input to numpy arrays of
-            # the specified data type.
-            return _WBS_SOLVER_DEVICES[device](np.asanyarray(fieldpoints, dtype=datatype),
-                                               np.asanyarray(vorpathpoints, dtype=datatype),
-                                               np.asanyarray(corradii, dtype=datatype),
-                                               np.asanyarray(circulations, dtype=datatype),
-                                               datatype(stepsizescalar))
-        except KeyError:
-            raise ValueError(f'Invalid device: \'{device}\'. Available devices: {list(_WBS_SOLVER_DEVICES.keys())}')
+        self.vpps = np.array(vpps)
+        self.crads = np.array(crads)
+        self.circs = np.array(circs)
 
-    print(f'! User API to Biot-Savart solvers set up. Available devices: {list(_WBS_SOLVER_DEVICES.keys())}')
+    def __len__(self):
+        return self.vpps.shape[0]
 
+    def velfp(self, fps, stepscalar, minstepsize, thread):
+        """
+        vel: velocity at fps induced by the vortex
+
+        # Arguments
+        fps: Nx3 array of floating point numbers
+        stepscalar: float
+        minstepsize: float
+        threaded: bool
+
+        # Returns
+        rtnvals: Nx3 array
+        """
+        return wbs_cpu(self, np.array(fps).reshape(-1, 3), stepscalar, minstepsize, thread)
+
+    def vel(self, stepscalar, minstepsize, thread):
+        """
+        vel: velocity at each path point
+
+        # Arguments
+        stepscalar: float
+        minstepsize: float
+        threaded: bool
+
+        # Returns
+        rtnvals: Nx3 array
+        """
+        return wbs_cpu(self, self.vpps, stepscalar, minstepsize, thread)
+    
+
+    
+    
 

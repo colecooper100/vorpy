@@ -1,0 +1,9 @@
+name = "weighted_biot_savart_integrator"
+uuid = "074c469c-5ab1-483c-8632-3e124aab6ada"
+authors = ["kbcollins <85638922+kbcollins@users.noreply.github.com>"]
+version = "0.1.0"
+
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"

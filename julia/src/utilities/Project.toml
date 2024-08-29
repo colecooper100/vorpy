@@ -1,7 +1,0 @@
-name = "utilities"
-uuid = "112e32b9-080e-4c33-b486-a98261538424"
-authors = ["kbcollins <85638922+kbcollins@users.noreply.github.com>"]
-version = "0.1.0"
-
-[deps]
-StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
