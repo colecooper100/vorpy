@@ -17,7 +17,6 @@ function linear_polygonal_path(
     # Compute segment vector
     segvec = vppF .- vppI
     seglen = norm(segvec)
-    unttanseg = segvec ./ seglen
 
     if ell >= seglen
         # At or pass end of segment
@@ -26,12 +25,13 @@ function linear_polygonal_path(
         rtnendofseg = true
     else
         # Not at end of segment
-        rtnvpp = vppI .+ (ell .* unttanseg)
+        rtnvpp = vppI .+ (ell / seglen) .* segvec
         rtnell = ell
         rtnendofseg = false
     end
 
-    return rtnvpp, unttanseg, rtnell, rtnendofseg
+    rtnunttanseg = segvec ./ seglen
+    return rtnvpp, rtnunttanseg, rtnell, rtnendofseg
 
 end  # function linear_polygonal_path
 

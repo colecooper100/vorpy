@@ -12,25 +12,25 @@ function packseg(
     indx::Integer)::SVector{10, T} where {T<:AbstractFloat}
 
     # Get starting point of segment
-    vpp1 = SVector{3, T}(
+    vppI = SVector{3, T}(
     vpps[1, indx],
     vpps[2, indx],
     vpps[3, indx])
 
     # Get the ending point of segment
-    vpp2 = SVector{3, T}(
+    vppF = SVector{3, T}(
     vpps[1, indx+1],
     vpps[2, indx+1],
     vpps[3, indx+1])
 
     # @inbounds return vpp1, vpp2, crads[indx], crads[indx+1], circs[indx], circs[indx+1]
-    return SVector{10, T}(vpp1..., vpp2..., crads[indx], crads[indx+1], circs[indx], circs[indx+1])
+    return SVector{10, T}(vppI..., vppF..., crads[indx], crads[indx+1], circs[indx], circs[indx+1])
 end
 
 
 # Function for picking a field point out of a
 # 3xN array of field points
-function get3col(mat::AbstractArray{T}, indx::Integer) where {T<:AbstractFloat}
+function get3col(mat::AbstractArray{T}, indx::Integer)::SVector{3, T} where {T<:AbstractFloat}
     return SVector{3, T}(mat[1, indx], mat[2, indx], mat[3, indx])
 end
 

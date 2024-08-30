@@ -38,12 +38,13 @@ class linepath(vp.vorpath):
         """
         self.vppF = np.array([linelen/2, 0.0, 0.0], dtype=dtyp)
         self.vppI = -self.vppF.copy()
-        vpps = np.linspace(self.vppF, self.vppI, numsegs+1, dtype=dtyp)
+        vpps = np.linspace(self.vppI, self.vppF, numsegs+1, dtype=dtyp)
         crads = np.ones(numsegs+1, dtype=dtyp) * dtyp(crad)
         circs = np.ones(numsegs+1, dtype=dtyp) * dtyp(circ)
         super().__init__(vpps, crads, circs)
 
     def velfp_lamboseen(self, fps):
+        # velfp_lamboseen(fps, vppI, vppF, crad, circ)
         return velfp_lamboseen(fps, self.vppI, self.vppF, self.crads[0], self.circs[0])
 
 

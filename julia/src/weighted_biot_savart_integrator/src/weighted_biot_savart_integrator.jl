@@ -5,7 +5,7 @@ using StaticArrays
 using LinearAlgebra
 
 
-export wbs_cpu  # wbs_1fp, INTGR_RTN_TYP,
+export wbs_cpu
 
 
 ###############################################################
@@ -60,22 +60,18 @@ end
 
 ###############################################################
 function wbs_1seg(
+                # seg := SVector{10, T}(vppI..., vppF..., crads[indx], crads[indx+1], circs[indx], circs[indx+1])
+                seg::SVector{10, T},
                 fp::SVector{3, T},
-                vpps::AbstractArray{T, 2},
-                crads::AbstractArray{T, 1},
-                circs::AbstractArray{T, 1},
                 stepscalar::T,
-                minstepsize::T,
-                segindx::Integer) where {T<:AbstractFloat}
+                minstepsize::T) where {T<:AbstractFloat}
 
-    # Get vortex segment
-    # vorseg := (vpp1, vpp2, crad1, crad2, circ1, circ2)
-    seg = packseg(vpps, crads, circs, segindx)
+    
 
     # Compute step size for the integrator
     stepsize = compstepsize(seg[7], seg[8], stepscalar, minstepsize)
 
-    # Make params vector for integrator
+    # Pack params vector for integrator
     params = SVector{13, T}(fp..., seg...)
 
     # Integrate WBS integrand for the current
@@ -122,11 +118,20 @@ function wbs_1fp(
     numpathsegs = size(vpps, 2) - 1
 
     # Initialize the return array
+    # This should be the same length as the return
+    # of the integrand function
     rtnvals = SVector{3, T}(0, 0, 0)
 
     for segindx in 1:numpathsegs
+        # Get vortex segment
+        # seg := SVector{10, T}(vppI..., vppF..., crads[indx], crads[indx+1], circs[indx], circs[indx+1])
+        seg = packseg(vpps, crads, circs, segindx)
+        # println("seg", segindx, ": ", seg)  # Debugging
+
         # Accumulate the result for all segments
-        rtnvals = rtnvals .+ wbs_1seg(fp, vpps, crads, circs, stepscalar, minstepsize, segindx)
+        segvel = wbs_1seg(seg, fp, stepscalar, minstepsize)
+        # println("segvel: ", segvel)  # Debugging
+        rtnvals = rtnvals .+ segvel
     end
 
     return rtnvals
@@ -152,11 +157,8 @@ function wbs_cpu(
             circulations;
             stepsizescalar::T,
             minstepsize::T,
-            threaded::Bool=false) where {T<:AbstractFloat}
+            threaded::Bool) where {T<:AbstractFloat}
 
-    # println("typeof(fieldpoints): ", typeof(fieldpoints))
-    # println("get3col(fieldpoints, 1): ", get3col(fieldpoints, 1))
-    # println("Base.supertype(fieldpoints): ", Base.supertype(fieldpoints))
     # Create an array to store the return values
     # The first index will be equal to the length
     # of the return of the integrand function.
@@ -167,24 +169,24 @@ function wbs_cpu(
         @threads for fpindx in axes(fieldpoints, 2)
             fp = get3col(fieldpoints, fpindx)
             rtnvals[:, fpindx] .= wbs_1fp(
-                                                fp,
-                                                vorpathpoints,
-                                                cordradii,
-                                                circulations,
-                                                stepsizescalar,
-                                                minstepsize)
-                            
+                                        fp,
+                                        vorpathpoints,
+                                        cordradii,
+                                        circulations,
+                                        stepsizescalar,
+                                        minstepsize)
+                    
         end
     else
         for fpindx in axes(fieldpoints, 2)
             fp = get3col(fieldpoints, fpindx)
             rtnvals[:, fpindx] .= wbs_1fp(
-                                                fp,
-                                                vorpathpoints,
-                                                cordradii,
-                                                circulations,
-                                                stepsizescalar,
-                                                minstepsize)
+                                        fp,
+                                        vorpathpoints,
+                                        cordradii,
+                                        circulations,
+                                        stepsizescalar,
+                                        minstepsize)
 
         end
     end

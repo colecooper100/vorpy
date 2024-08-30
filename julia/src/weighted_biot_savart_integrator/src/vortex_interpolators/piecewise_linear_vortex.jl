@@ -107,12 +107,11 @@ function piecewise_linear_vortex(
     # Compute segment vector
     segvec = vppF .- vppI
     seglen = norm(segvec)
-
     # Unit tagent of segment
     unttanseg = segvec ./ seglen
 
     Rvpp = vpp .- vppI
-    Rtanmag = dot(Rvpp, unttanseg)
+    Rtanmag = abs(dot(Rvpp, unttanseg))
 
     # Interpolate the vortex properties
     rtncrad = cradI + ((Rtanmag / seglen) * (cradF - cradI))

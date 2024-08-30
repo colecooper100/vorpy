@@ -25,14 +25,14 @@ function nonuniform_trapezoidal_rule(
         itercount += 1  # DEBUG
         # Advance the method by one step
         prev_ell = ell
-        prev_eval = curr_eval
-        ellmaybe = ell + stepsize
+        prev_eval = copy(curr_eval)
+        ellmaybe = prev_ell + stepsize
         # Evaluate the integrand at ellmaybe step
         curr_eval, ell, endofseg = integrand(params, ellmaybe)
         # Acculmulate the step solutions of
         # the integrand
         deltaell = ell - prev_ell
-        rtnval = rtnval .+ ((prev_eval .+ curr_eval) .* deltaell / T(2))
+        rtnval = rtnval .+ ((prev_eval .+ curr_eval) .* deltaell ./ T(2))
     end
 
     return rtnval

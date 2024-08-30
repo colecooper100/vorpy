@@ -69,6 +69,9 @@ class vorpath:
 
     def __len__(self):
         return self.vpps.shape[0]
+    
+    def __repr__(self):
+        return f'vorpath(vpps=\n\t{repr(self.vpps)},\n\tcrads=\n\t{repr(self.crads)},\n\tcircs=\n\t{repr(self.circs)})'
 
     def velfp(self, fps, stepscalar, minstepsize, thread):
         """
