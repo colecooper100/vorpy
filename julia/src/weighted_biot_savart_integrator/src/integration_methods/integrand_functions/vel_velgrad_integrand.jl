@@ -1,13 +1,8 @@
 #==================================================
 I was originally going to separate the integrands
-for the velocity and velocity gradient. I had just
-finished making my first iteration of the joint
-integrand method and that performed poorly. I was
-trying to separate things to see if that reduce
-the complexity of the functions being run.
-
-However, I realized that weight_function returns
-the weight and its derivative (with the derivative
+for the velocity and velocity gradient. However,
+I realized that weight_function returns both the
+weight and its derivative (with the derivative
 being very cheap to compute). Dustin has said that
 the weight function is the most expensive part of
 the integrand. So, it would be better to do one
@@ -19,11 +14,6 @@ the derivative of the weight function back and
 then passing that to the velocity gradient function
 but at that point why not just compute them at the
 same time in the same integrand.
-
-I'm going to try to do the joint integrand but
-make the out put being integrated a flat SVector.
-Maybe the GPU doesn't do math over a tuple as
-efficiently as it would an SVector.
 ==================================================#
 function vel_velgrad_integrand(
             #============================================

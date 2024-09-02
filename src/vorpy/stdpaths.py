@@ -83,7 +83,7 @@ class ringpath(vp.vorpath):
         # compute it once when the ring is created.
         beta = 0.558
         scl = self.circs[0] / (4 * np.pi * self.ringrad)
-        trm = np.log(8 * self.ringrad / (np.sqrt(2) * self.crads[0]))
+        trm = np.log((8 * self.ringrad) / (np.sqrt(2) * self.crads[0]))
         self.vel_onring_infthin = scl * (trm - beta)
 
 

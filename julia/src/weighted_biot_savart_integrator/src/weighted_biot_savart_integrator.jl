@@ -9,77 +9,76 @@ export wbs_cpu
 
 
 ###############################################################
-# Bring in the utility functions
-include("./wbs_utility_fns.jl")
-
-# Set the weight function used by the WBS integrand
-include("./weight_functions/bernstein_polynomial_weight.jl")
-function weight_function(delta::T) where {T<:AbstractFloat}
-    return bernstein_polynomial_weight(delta)
+# Function for picking a field point out of a
+# 3xN array of field points
+@inline function getfp(fps::AbstractArray{T}, indx::Integer)::SVector{3, T} where {T<:AbstractFloat}
+    return SVector{3, T}(fps[1, indx], fps[2, indx], fps[3, indx])
 end
 
-# Set the INTGRTNTYP to the return type of the 
-# integrand. This is used by other functions.
-# INTGR_RTN_TYP{T} = SVector{3, T}
-# Set the integrand function to the WBS integrand
-# include("./integrand_functions/vel_velgrad_integrand.jl")
-include("./integrand_functions/wbs_integrand_function.jl")
-# Set the return type of the integrand function
-function integrand(
-            params::SVector{13, T},
-            ell::T) where {T<:AbstractFloat}
-    # rtnvec, rtngrad, endofseg = vel_velgrad_integrand(fp, vpprops, ell)
-    return wbs_integrand_function(params, ell)
+
+@inline function compstepsize(
+                    cradI::T,
+                    cradF::T,
+                    stepscalar::T,
+                    minstepsize::T)::T where {T<:AbstractFloat}
+
+    mincradstep = stepscalar * T(min(cradI, cradF))
+    stepsize = max(mincradstep, minstepsize)
+
+    return stepsize
 end
 
-# Set the vortex properties interpolator
-include("./path_interpolators/linear_polygonal_path.jl")
-include("./vortex_interpolators/piecewise_linear_vortex.jl")
-function vortex_interpolator(
-                        vppI::SVector{3, T},
-                        vppF::SVector{3, T},
-                        cradI::T,
-                        cradF::T,
-                        circI::T,
-                        circF::T,
-                        ell::T) where {T<:AbstractFloat}
-    
-    vpp, unttanvpp, elltrue, endofseg = linear_polygonal_path(vppI, vppF, ell)
-    crad, circ = piecewise_linear_vortex(vpp, vppI, vppF, cradI, cradF, circI, circF)
-    return vpp, unttanvpp, crad, circ, elltrue, endofseg
+@inline function pckprams(
+    fp::SVector{3, T},
+    vpps::AbstractArray{T, 2},
+    crads::AbstractArray{T, 1},
+    circs::AbstractArray{T, 1},
+    indx::Integer)::SVector{13, T} where {T<:AbstractFloat}
+
+    # Get starting point of segment
+    vppI = SVector{3, T}(
+    vpps[1, indx],
+    vpps[2, indx],
+    vpps[3, indx])
+
+    # Get the ending point of segment
+    vppF = SVector{3, T}(
+    vpps[1, indx+1],
+    vpps[2, indx+1],
+    vpps[3, indx+1])
+
+    # @inbounds return vpp1, vpp2, crads[indx], crads[indx+1], circs[indx], circs[indx+1]
+    return SVector{13, T}(fp..., vppI..., vppF..., crads[indx], crads[indx+1], circs[indx], circs[indx+1])
+    # return SVector{10, T}(vppI..., vppF..., crads[indx], crads[indx+1], circs[indx], circs[indx+1])
 end
 
-# Set integration method
+# Set WBS integration method
 include("integration_methods/nonuniform_trapezoidal_rule.jl")
-function integrator(
+@inline function WBSintegrator(
             stepsize::T,    
             params::SVector{13, T}) where {T<:AbstractFloat}
-    return nonuniform_trapezoidal_rule(stepsize, params)
+    sol, itercnt = nonuniform_trapezoidal_rule(stepsize, params)
+    return sol
 end
 
 
 ###############################################################
-function wbs_1seg(
-                # seg := SVector{10, T}(vppI..., vppF..., crads[indx], crads[indx+1], circs[indx], circs[indx+1])
-                seg::SVector{10, T},
-                fp::SVector{3, T},
-                stepscalar::T,
-                minstepsize::T) where {T<:AbstractFloat}
+# function wbs_1seg(
+#                 fp::SVector{3, T},
+#                 # seg := SVector{10, T}(vppI..., vppF..., crads[indx], crads[indx+1], circs[indx], circs[indx+1])
+#                 seg::SVector{10, T},
+#                 stepscalar::T,
+#                 minstepsize::T) where {T<:AbstractFloat}
 
-    
+#     # Compute step size for the integrator
+#     stepsize = compstepsize(seg[7], seg[8], stepscalar, minstepsize)
 
-    # Compute step size for the integrator
-    stepsize = compstepsize(seg[7], seg[8], stepscalar, minstepsize)
+#     # Integrate WBS integrand for the current
+#     # segment
+#     segvals = integrator(stepsize, params)
 
-    # Pack params vector for integrator
-    params = SVector{13, T}(fp..., seg...)
-
-    # Integrate WBS integrand for the current
-    # segment
-    segvals = integrator(stepsize, params)
-
-    return segvals
-end
+#     return segvals
+# end
 
 
 #===================================================
@@ -123,15 +122,20 @@ function wbs_1fp(
     rtnvals = SVector{3, T}(0, 0, 0)
 
     for segindx in 1:numpathsegs
-        # Get vortex segment
-        # seg := SVector{10, T}(vppI..., vppF..., crads[indx], crads[indx+1], circs[indx], circs[indx+1])
-        seg = packseg(vpps, crads, circs, segindx)
-        # println("seg", segindx, ": ", seg)  # Debugging
+        # Pack params vector for integrator
+        # params = SVector{13, T}(fp..., vppI..., vppF..., crads[indx], crads[indx+1], circs[indx], circs[indx+1])
+        params = pckprams(fp, vpps, crads, circs, segindx)
 
-        # Accumulate the result for all segments
-        segvel = wbs_1seg(seg, fp, stepscalar, minstepsize)
-        # println("segvel: ", segvel)  # Debugging
-        rtnvals = rtnvals .+ segvel
+        # Compute step size for the integrator
+        # stepsize = compstepsize(seg[7], seg[8], stepscalar, minstepsize)
+        stepsize = compstepsize(params[10], params[11], stepscalar, minstepsize)
+
+        # Integrate WBS integrand for the current
+        # segment and accumulate the result for all segments
+        # segvel = wbs_1seg(fp, seg, stepscalar, minstepsize)
+        # println("segvel: ", segvel)  # DEBUG
+        # rtnvals = rtnvals .+ segvel
+        rtnvals = rtnvals .+ WBSintegrator(stepsize, params)
     end
 
     return rtnvals
@@ -167,7 +171,7 @@ function wbs_cpu(
     # Loop over the field points
     if threaded
         @threads for fpindx in axes(fieldpoints, 2)
-            fp = get3col(fieldpoints, fpindx)
+            fp = getfp(fieldpoints, fpindx)
             rtnvals[:, fpindx] .= wbs_1fp(
                                         fp,
                                         vorpathpoints,
@@ -179,7 +183,7 @@ function wbs_cpu(
         end
     else
         for fpindx in axes(fieldpoints, 2)
-            fp = get3col(fieldpoints, fpindx)
+            fp = getfp(fieldpoints, fpindx)
             rtnvals[:, fpindx] .= wbs_1fp(
                                         fp,
                                         vorpathpoints,
