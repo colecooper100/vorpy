@@ -11,12 +11,11 @@ export wbs_cpu
 ###############################################################
 # Function for picking a field point out of a
 # 3xN array of field points
-@inline function getfp(fps::AbstractArray{T}, indx::Integer)::SVector{3, T} where {T<:AbstractFloat}
+function getfp(fps::AbstractArray{T}, indx::Integer)::SVector{3, T} where {T<:AbstractFloat}
     return SVector{3, T}(fps[1, indx], fps[2, indx], fps[3, indx])
 end
 
-
-@inline function compstepsize(
+function compstepsize(
                     cradI::T,
                     cradF::T,
                     stepscalar::T,
@@ -28,7 +27,7 @@ end
     return stepsize
 end
 
-@inline function pckprams(
+function pckprams(
     fp::SVector{3, T},
     vpps::AbstractArray{T, 2},
     crads::AbstractArray{T, 1},
@@ -54,10 +53,12 @@ end
 
 # Set WBS integration method
 include("integration_methods/nonuniform_trapezoidal_rule.jl")
-@inline function WBSintegrator(
+# include("integration_methods/bimodal_polygonal_path_integrator/bimodal_polygonal_path_integrator.jl")
+function WBSintegrator(
             stepsize::T,    
             params::SVector{13, T}) where {T<:AbstractFloat}
     sol, itercnt = nonuniform_trapezoidal_rule(stepsize, params)
+    # sol, itercnt = bimodal_polygonal_path(stepsize, params)
     return sol
 end
 
@@ -127,7 +128,6 @@ function wbs_1fp(
         params = pckprams(fp, vpps, crads, circs, segindx)
 
         # Compute step size for the integrator
-        # stepsize = compstepsize(seg[7], seg[8], stepscalar, minstepsize)
         stepsize = compstepsize(params[10], params[11], stepscalar, minstepsize)
 
         # Integrate WBS integrand for the current

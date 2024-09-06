@@ -16,8 +16,8 @@ function test_wbs_integrator(linelen, numsegs, numfps, analyticalsol=false)
     fps = zeros(TYP, 3, numfps)
     fps[1, :] .= TYP(0)
     fps[2, :] .= range(1, 45, length=numfps)
-    STEPSCALAR = TYP(1e-6)
-    MINSTEPSIZE = TYP(1e-2)
+    STEPSCALAR = TYP(1e-1)
+    MINSTEPSIZE = TYP(1e-3)
 
     t0 = time_ns()  # TIMING
     #=======================================
@@ -37,7 +37,7 @@ function test_wbs_integrator(linelen, numsegs, numfps, analyticalsol=false)
                     circs;
                     stepsizescalar=STEPSCALAR,
                     minstepsize=MINSTEPSIZE,
-                    threaded=true)
+                    threaded=false)
     
     t1 = time_ns()  # TIMING
     tottimems = (t1-t0) / 1e6  # TIMING
@@ -54,10 +54,8 @@ function test_wbs_integrator(linelen, numsegs, numfps, analyticalsol=false)
 
     if analyticalsol
         anavelsinf = zeros(TYP, 3, numfps)
-        # anavelspoly = zeros(TYP, 3, NUMFPS)
         for i in 1:numfps
             anavelsinf[:, i] .= u_inflong_line(fps[:, i], vppI, vppF, crads[1], circs[1])
-            # anavelspoly[:, i] .= u_polyline(fps[:, i], vpps, circs)
         end
         errvecinf = abs.(anavelsinf[3, :] .- rtnvals[3, :])
         return rtnvals, anavelsinf, errvecinf
@@ -66,22 +64,28 @@ function test_wbs_integrator(linelen, numsegs, numfps, analyticalsol=false)
     end
 end
 
-linelengths = [10_000]  # [10, 100, 1000, 10000]
-numnumsegs = [50_000]  # [1, 10, 200, 400, 2000]
+
+
+linelengths = [20_000]  # [10, 100, 1000, 10000]
+numnumsegs = [20_000] #[ceil(Integer, linelengths[1] / (5 * 7.5))]  # [1, 10, 200, 400, 2000]
+println("Number of segments: ", numnumsegs[1])
 
 # test_wbs_integrator(linelen, numsegs, analyticalsol=false)
-rtn = test_wbs_integrator(linelengths[1], numnumsegs[1], 10_000, true)
+rtn = test_wbs_integrator(linelengths[1], numnumsegs[1], 100, true)
+# println("rtn[1]: ", rtn[1])  # DEBUG
 
-# # errmod = abs.((rtn[1][3, :] ./ 6) - rtn[2][3, :])
-# errmod = abs.((rtn[1][3, :] ./ (2 * pi)) - rtn[2][3, :])
-# plot(errmod, title="Modified Error")
+# Plot the error
+errscl = 1  # 2.5  # 0.00012 * numnumsegs[1]
+println("Error scal: ", errscl)
+errmod = abs.((rtn[1][3, :] ./ errscl) - rtn[2][3, :])
+println("Mean error: ", mean(errmod))
+println("Max error: ", maximum(errmod))
+println("Min error: ", minimum(errmod))
+plot(errmod, title="Modified Error")
 
-
-plot(rtn[3], title="Error")
+# Plot the velocity profile
 plot(rtn[2][3, :], label="Analytical")
-plot!(rtn[1][3, :] ./ 6, label="WBS Modified")
 plot!(rtn[1][3, :], label="WBS")
-# plot(rtn[1][3, :] ./ (2 * pi), label="WBS Modified")
 
 
 

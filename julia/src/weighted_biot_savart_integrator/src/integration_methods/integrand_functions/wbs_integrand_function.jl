@@ -117,6 +117,7 @@ function wbs_integrand_function(
     =================================================#
     if Rmag != 0
         # t6 = time_ns()  # TIMING
+        # weight = T(1)  # DEBUG
         weight, _ = weight_function(Rmag / crad)
         # t7 = time_ns()  # TIMING
         scl = circ / (4 * T(pi))

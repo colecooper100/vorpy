@@ -36,6 +36,7 @@ integrand over to the scrip (or we change how we
 are doing things at that time, but for now it
 seems logical to me to put this here.
 =================================================#
+
 # Set the integrand function to the WBS integrand
 # include("./integrand_functions/vel_velgrad_integrand.jl")
 include("./integrand_functions/wbs_integrand_function.jl")
@@ -44,6 +45,8 @@ function integrand(
             params::SVector{13, T},
             ell::T) where {T<:AbstractFloat}
     # rtnvec, rtngrad, endofseg = vel_velgrad_integrand(fp, vpprops, ell)
+    # rtnvals = wbs_integrand_function(params, ell)  # DEBUG
+    # return SVector{3, T}(1, 1, 1), rtnvals[2], rtnvals[3]  # DEBUG
     return wbs_integrand_function(params, ell)
 end
 
@@ -56,26 +59,45 @@ function nonuniform_trapezoidal_rule(
     
     # Evaluate integrand function at ell=0
     # to initialize the integrator
-    curr_eval, ell, endofseg = integrand(params, T(0))  # ell=0
+    curr_eval, ell, endofseg = integrand(params, T(0))
 
     # Initialize the return value
-    rtnval = curr_eval
+    # This needs 
+    # It needs to have the same shape and type as
+    # the return of the integrand function
+    rtnval = SVector{3, T}(0, 0, 0)
+
+    # println("stepsize: ", stepsize)  # DEBUG
 
     # Step through the segment
-    itercount = 1  # DEBUG
+    # itercount starts at 1 because we already did one
+    # evaluation of the integrand above.
+    itercount = 1
     while !endofseg
-        itercount += 1  # DEBUG
+        # println("rtnval (before): ", rtnval)  # DEBUG
+        itercount += 1
         # Advance the method by one step
         prev_ell = ell
-        prev_eval = copy(curr_eval)
+        prev_eval = curr_eval
         ellmaybe = prev_ell + stepsize
+        # print("ellmaybe: ", ellmaybe)  # DEBUG
         # Evaluate the integrand at ellmaybe step
         curr_eval, ell, endofseg = integrand(params, ellmaybe)
+        # println(" ell: ", ell)  # DEBUG
         # Acculmulate the step solutions of
         # the integrand
         deltaell = ell - prev_ell
         rtnval = rtnval .+ (((prev_eval .+ curr_eval) ./ T(2)) .* deltaell)
+        # print("prev_eval: ", prev_eval)  # DEBUG
+        # print(" curr_eval: ", curr_eval)  # DEBUG
+        # print(" prev_eval .+ curr_eval: ", prev_eval .+ curr_eval)  # DEBUG
+        # print(" deltaell: ", deltaell)  # DEBUG
+        # println(" (((prev_eval .+ curr_eval) ./ T(2)) .* deltaell): ", (((prev_eval .+ curr_eval) ./ T(2)) .* deltaell))  # DEBUG
+        # println("rtnval (after): ", rtnval)  # DEBUG
     end
+
+    # # DEBUG
+    # println("itercount: ", itercount)
 
     return rtnval, itercount
 end
