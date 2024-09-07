@@ -52,13 +52,13 @@ function pckprams(
 end
 
 # Set WBS integration method
-include("integration_methods/nonuniform_trapezoidal_rule.jl")
-# include("integration_methods/bimodal_polygonal_path_integrator/bimodal_polygonal_path_integrator.jl")
+# include("integration_methods/nonuniform_trapezoidal_rule.jl")
+include("integration_methods/bimodal_polygonal_path_integrator/bimodal_polygonal_path_integrator.jl")
 function WBSintegrator(
             stepsize::T,    
             params::SVector{13, T}) where {T<:AbstractFloat}
-    sol, itercnt = nonuniform_trapezoidal_rule(stepsize, params)
-    # sol, itercnt = bimodal_polygonal_path(stepsize, params)
+    # sol, itercnt = nonuniform_trapezoidal_rule(stepsize, params)
+    sol, itercnt = bimodal_polygonal_path(stepsize, params)
     return sol
 end
 
